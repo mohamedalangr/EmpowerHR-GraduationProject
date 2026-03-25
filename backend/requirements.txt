@@ -1,0 +1,8 @@
+django>=4.2
+djangorestframework>=3.14
+django-cors-headers>=4.0
+PyMuPDF>=1.23
+sentence-transformers>=2.7
+scikit-learn>=1.4
+nltk>=3.8
+pandas>=2.0

@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Careers @ HR Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --red:#E8321A;--red-light:#FFF0ED;--red-mid:#FDDDD7;
+  --gray-900:#111318;--gray-700:#3D424F;--gray-500:#6B7280;
+  --gray-300:#D1D5DB;--gray-100:#F4F5F7;--gray-50:#FAFAFA;
+  --white:#FFFFFF;
+  --serif:'Instrument Serif',serif;
+  --sans:'DM Sans',sans-serif;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.07);
+  --shadow-md:0 4px 16px rgba(0,0,0,.08);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.1);
+  --shadow-red:0 8px 24px rgba(232,50,26,.18);
+}
+body{font-family:var(--sans);background:var(--gray-50);color:var(--gray-900);min-height:100vh;-webkit-font-smoothing:antialiased}
+
+/* NAV */
+nav{background:var(--white);border-bottom:1px solid #EAECF0;position:sticky;top:0;z-index:100;padding:0 32px}
+.nav-inner{max-width:1280px;margin:0 auto;height:68px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{display:flex;align-items:center;gap:12px}
+.nav-logo{width:42px;height:42px;background:var(--red);border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-red)}
+.nav-logo svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav-name{font-size:17px;font-weight:700;letter-spacing:-.3px}
+.btn-ghost{padding:9px 18px;font-size:13.5px;font-weight:600;color:var(--gray-700);border:none;background:none;cursor:pointer;border-radius:20px;transition:background .15s,color .15s;font-family:var(--sans)}
+.btn-ghost:hover{background:var(--gray-100);color:var(--red)}
+.btn-primary{padding:9px 20px;font-size:13.5px;font-weight:700;color:#fff;background:var(--red);border:none;border-radius:20px;cursor:pointer;box-shadow:var(--shadow-red);transition:background .15s;font-family:var(--sans)}
+.btn-primary:hover{background:#d02a14}
+.avatar{width:38px;height:38px;background:var(--red-light);border-radius:12px;border:1.5px solid var(--red-mid);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--red)}
+
+/* HERO */
+.hero{background:var(--white);border-bottom:1px solid #EAECF0;padding:64px 32px 56px;text-align:center}
+.hero-inner{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:20px}
+.hero h1{font-family:var(--serif);font-size:clamp(36px,5vw,56px);font-weight:400;line-height:1.12;letter-spacing:-.5px;max-width:700px}
+.hero h1 em{color:var(--red);font-style:italic;text-decoration:underline;text-decoration-color:#FDDDD7;text-underline-offset:6px}
+.hero p{font-size:17px;color:var(--gray-500);max-width:480px;line-height:1.6}
+.search-wrap{width:100%;max-width:560px;margin-top:12px;position:relative}
+.search-wrap svg{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:20px;height:20px;stroke:var(--gray-300);pointer-events:none;transition:stroke .15s;fill:none}
+.search-wrap:focus-within svg{stroke:var(--red)}
+.search-input{width:100%;padding:16px 20px 16px 50px;border:2px solid transparent;background:var(--gray-100);border-radius:9999px;font-size:15px;font-family:var(--sans);font-weight:500;color:var(--gray-900);outline:none;transition:all .2s}
+.search-input:focus{background:var(--white);border-color:var(--red);box-shadow:0 0 0 4px rgba(232,50,26,.08)}
+.search-input::placeholder{color:var(--gray-300)}
+
+/* MAIN */
+.main{max-width:1280px;margin:0 auto;padding:40px 32px 80px;display:grid;grid-template-columns:1fr 380px;gap:28px;align-items:start}
+@media(max-width:1024px){.main{grid-template-columns:1fr}}
+
+/* JOBS */
+.jobs-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.jobs-count{font-size:22px;font-weight:700}
+.dept-select{padding:8px 14px;border:1px solid var(--gray-300);border-radius:12px;font-size:13px;font-weight:600;color:var(--gray-700);background:var(--white);outline:none;cursor:pointer;font-family:var(--sans)}
+.jobs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.skeleton{background:#F3F4F6;border-radius:28px;height:200px;animation:pulse 1.5s infinite}
+.skeleton:nth-child(2){animation-delay:.15s}
+.skeleton:nth-child(3){animation-delay:.3s}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+
+/* JOB CARD */
+.job-card{background:var(--white);border:2px solid #EAECF0;border-radius:28px;padding:28px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s}
+.job-card:hover{border-color:#FDDDD7;box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.job-card.active{border-color:var(--red);box-shadow:0 0 0 4px rgba(232,50,26,.08)}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.card-title{font-size:17px;font-weight:700;line-height:1.3;transition:color .15s}
+.job-card:hover .card-title,.job-card.active .card-title{color:var(--red)}
+.card-dept{font-size:10.5px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.1em;margin-top:4px}
+.card-chevron{width:32px;height:32px;background:var(--gray-100);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.job-card:hover .card-chevron,.job-card.active .card-chevron{background:var(--red-light)}
+.card-chevron svg{width:16px;height:16px;stroke:var(--gray-400);fill:none;transition:stroke .15s}
+.job-card:hover .card-chevron svg,.job-card.active .card-chevron svg{stroke:var(--red)}
+.card-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px}
+.meta-item{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray-500);font-weight:500}
+.meta-item svg{width:14px;height:14px;stroke:var(--gray-300);fill:none;flex-shrink:0}
+.card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:18px;border-top:1px solid #F3F4F6}
+.card-salary{font-size:13px;font-weight:700}
+.btn-apply-sm{padding:8px 16px;background:var(--red);color:#fff;border:none;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-apply-sm:hover{background:#d02a14}
+
+/* SIDEBAR */
+.sidebar-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:64px 32px;border:2px dashed var(--gray-300);border-radius:28px;gap:14px;background:var(--white)}
+.empty-icon{width:56px;height:56px;background:var(--gray-100);border-radius:50%;display:flex;align-items:center;justify-content:center}
+.empty-icon svg{width:26px;height:26px;stroke:var(--gray-300);fill:none}
+.sidebar-card{background:var(--white);border-radius:28px;border:1px solid #EAECF0;padding:32px;box-shadow:var(--shadow-lg);position:sticky;top:96px;display:none}
+.sidebar-badge{display:inline-flex;padding:5px 12px;background:var(--red-light);color:var(--red);border-radius:8px;font-size:11px;font-weight:700;letter-spacing:.06em}
+.sidebar-title{font-family:var(--serif);font-size:26px;font-weight:400;line-height:1.2;margin:12px 0 6px}
+.sidebar-desc{font-size:13.5px;color:var(--gray-500);line-height:1.65;margin-bottom:22px}
+.req-section-title{font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.req-section-title svg{width:14px;height:14px;stroke:var(--red);fill:none}
+.req-list{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.req-list li{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--gray-700);font-weight:500;line-height:1.45}
+.req-dot{width:6px;height:6px;border-radius:50%;background:var(--gray-300);margin-top:5px;flex-shrink:0}
+.btn-apply-full{width:100%;padding:15px;background:var(--red);color:#fff;border:none;border-radius:16px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:var(--shadow-red);transition:background .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-apply-full:hover{background:#d02a14}
+.btn-apply-full svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5}
+.sidebar-footer{font-size:10px;color:var(--gray-300);text-align:center;margin-top:12px;font-weight:500}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(17,19,24,.45);backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s}
+.overlay.show{display:flex}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal{background:var(--white);border-radius:36px;width:100%;max-width:520px;border:1px solid #EAECF0;box-shadow:0 24px 80px rgba(0,0,0,.14);animation:slideUp .25s cubic-bezier(.22,.68,0,1.2)}
+.modal-lg{max-width:640px}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal-body{padding:36px;max-height:88vh;overflow-y:auto}
+.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.modal-title-wrap{display:flex;align-items:center;gap:12px}
+.modal-icon{width:48px;height:48px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.modal-icon.red{background:var(--red);box-shadow:var(--shadow-red)}
+.modal-icon.soft{background:var(--red-light)}
+.modal-icon svg{width:22px;height:22px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.modal-icon.red svg{stroke:#fff}
+.modal-icon.soft svg{stroke:var(--red)}
+.modal-close{width:36px;height:36px;border:none;background:var(--gray-100);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
+.modal-close:hover{background:var(--gray-300)}
+.modal-close svg{width:16px;height:16px;stroke:var(--gray-700);fill:none}
+.modal-h3{font-size:22px;font-weight:700}
+.modal-sub{font-size:13px;color:var(--gray-500);font-weight:500;margin-top:2px}
+
+/* AUTH */
+.auth-tabs{display:flex;padding:4px;background:var(--gray-100);border-radius:16px;margin-bottom:24px}
+.auth-tab{flex:1;padding:10px;border:none;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);background:none;color:var(--gray-500);transition:all .2s}
+.auth-tab.active{background:var(--white);color:var(--red);box-shadow:var(--shadow-sm)}
+.form-field{margin-bottom:18px}
+.form-label{display:block;font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:8px}
+.form-input{width:100%;padding:13px 18px;background:var(--gray-100);border:2px solid transparent;border-radius:16px;font-size:14px;font-family:var(--sans);font-weight:500;color:var(--gray-900);outline:none;transition:all .2s}
+.form-input:focus{background:var(--white);border-color:var(--red);box-shadow:0 0 0 4px rgba(232,50,26,.08)}
+.form-input::placeholder{color:var(--gray-300)}
+
+/* APPLY */
+.upload-zone{padding:28px;background:var(--red-light);border:2px dashed var(--red-mid);border-radius:24px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;cursor:pointer;margin-bottom:24px;transition:background .15s;position:relative}
+.upload-zone:hover{background:#FDDDD7}
+.upload-icon-wrap{width:52px;height:52px;background:var(--white);border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-sm)}
+.upload-icon-wrap svg{width:22px;height:22px;stroke:var(--red);fill:none}
+.upload-title{font-size:13.5px;font-weight:700}
+.upload-sub{font-size:11.5px;color:var(--gray-500);font-weight:500}
+.upload-filename{font-size:12px;font-weight:700;color:var(--red);margin-top:2px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.col-2{grid-column:1/-1}
+.form-textarea{width:100%;padding:13px 18px;background:var(--gray-100);border:2px solid transparent;border-radius:16px;font-size:14px;font-family:var(--sans);font-weight:500;color:var(--gray-900);outline:none;transition:all .2s;resize:vertical;min-height:100px}
+.form-textarea:focus{background:var(--white);border-color:var(--red)}
+.modal-actions{display:flex;gap:12px;margin-top:24px}
+.btn-cancel{flex:1;padding:14px;background:var(--gray-100);color:var(--gray-700);border:none;border-radius:16px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:background .15s}
+.btn-cancel:hover{background:var(--gray-300)}
+.btn-submit{flex:1;padding:14px;background:var(--red);color:#fff;border:none;border-radius:16px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:var(--shadow-red);transition:background .15s}
+.btn-submit:hover:not(:disabled){background:#d02a14}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed}
+
+/* RESULTS */
+.ats-hero{text-align:center;padding:24px 0 20px;border-bottom:1px solid #F3F4F6;margin-bottom:20px}
+.ats-label{font-size:10px;font-weight:700;letter-spacing:.15em;color:var(--gray-500);text-transform:uppercase;margin-bottom:8px}
+.ats-number{font-family:var(--serif);font-size:68px;line-height:1;font-weight:400}
+.ats-bar-bg{height:4px;background:#F3F4F6;border-radius:2px;margin-top:14px;overflow:hidden}
+.ats-bar-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.4,0,.2,1);width:0%}
+.dim-rows{display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.dim-row{display:flex;flex-direction:column;gap:5px}
+.dim-hd{display:flex;justify-content:space-between;align-items:center}
+.dim-name{font-size:11px;font-weight:600;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em}
+.dim-val{font-size:12px;font-weight:700}
+.dim-track{height:3px;background:#F3F4F6;border-radius:2px;overflow:hidden}
+.dim-fill{height:100%;border-radius:2px;transition:width .85s cubic-bezier(.4,0,.2,1);width:0%}
+.result-chips{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px}
+.chip{background:var(--gray-100);border-radius:14px;padding:12px 14px}
+.chip-label{font-size:10px;font-weight:600;letter-spacing:.1em;color:var(--gray-500);text-transform:uppercase;margin-bottom:4px}
+.chip-value{font-size:14px;font-weight:700}
+.skills-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.skills-legend{font-size:10px;font-weight:400;color:var(--gray-300);margin-left:4px}
+.pills-wrap{display:flex;flex-wrap:wrap;gap:6px}
+.pill{padding:5px 12px;border-radius:8px;font-size:11.5px;font-weight:600;border:1px solid #EAECF0;color:var(--gray-500)}
+.pill.match{border-color:var(--red-mid);background:var(--red-light);color:var(--red)}
+.spinner{width:36px;height:36px;border:3px solid var(--red-mid);border-top-color:var(--red);border-radius:50%;animation:spin .75s linear infinite;margin:32px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{text-align:center;padding-bottom:48px}
+.loading-text p{font-size:14px;font-weight:600;color:var(--gray-700);margin-bottom:4px}
+.loading-text small{font-size:12px;color:var(--gray-300)}
+
+/* TOAST */
+.toast-wrap{position:fixed;bottom:28px;right:28px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--gray-900);color:#fff;padding:14px 20px;border-radius:14px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow-lg);animation:toastIn .3s cubic-bezier(.22,.68,0,1.2);max-width:320px}
+.toast svg{width:18px;height:18px;fill:none;flex-shrink:0}
+.toast.success svg{stroke:#69F0AE}
+.toast.error svg{stroke:#FF5252}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(8px)}}
+
+/* TABS (page switcher) */
+.page{display:none}.page.active{display:block}
+.nav-tabs{display:flex;gap:4px}
+.nav-tab{padding:8px 16px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;border-radius:20px;color:var(--gray-500);font-family:var(--sans);transition:all .15s}
+.nav-tab.active,.nav-tab:hover{background:var(--red-light);color:var(--red)}
+
+/* FEEDBACK PAGE */
+.fb-page{max-width:1280px;margin:0 auto;padding:40px 32px 80px}
+.fb-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+@media(max-width:768px){.fb-stats{grid-template-columns:1fr}}
+.fb-stat{border-radius:24px;padding:24px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-md)}
+.fb-stat.red{background:linear-gradient(135deg,#E8321A,#c4240f);color:#fff}
+.fb-stat.green{background:linear-gradient(135deg,#22C55E,#16a34a);color:#fff}
+.fb-stat.blue{background:linear-gradient(135deg,#3B82F6,#2563eb);color:#fff}
+.fb-stat-label{font-size:12px;font-weight:600;opacity:.85;margin-bottom:6px}
+.fb-stat-num{font-family:var(--serif);font-size:40px;font-weight:400;line-height:1}
+.fb-stat-icon{width:48px;height:48px;background:rgba(255,255,255,.2);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fb-stat-icon svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fb-filter{display:flex;gap:6px;background:var(--white);border:1px solid #EAECF0;border-radius:18px;padding:6px;margin-bottom:24px;width:fit-content}
+.fb-filter-btn{padding:9px 20px;border:none;background:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);color:var(--gray-500);transition:all .15s}
+.fb-filter-btn.active{background:var(--red-light);color:var(--red)}
+.fb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.fb-card{background:var(--white);border:2px solid #EAECF0;border-radius:28px;padding:26px;cursor:pointer;transition:all .2s}
+.fb-card:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.fb-card.pending{border-color:#FDDDD7}
+.fb-card:hover.pending{border-color:var(--red)}
+.fb-card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.fb-card-icon{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fb-card-icon.pending{background:var(--red-light)}
+.fb-card-icon.completed{background:#DCFCE7}
+.fb-card-icon svg{width:20px;height:20px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fb-card-icon.pending svg{stroke:var(--red)}
+.fb-card-icon.completed svg{stroke:#16a34a}
+.fb-badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.fb-badge.pending{background:#FFF7ED;color:#C2410C}
+.fb-badge.completed{background:#DCFCE7;color:#15803D}
+.fb-card h3{font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.3}
+.fb-card-meta{font-size:12px;color:var(--gray-500);font-weight:500;display:flex;align-items:center;gap:5px;margin-bottom:16px}
+.fb-card-meta svg{width:12px;height:12px;stroke:var(--gray-300);fill:none;flex-shrink:0}
+.fb-avg{background:#F0FDF4;border-radius:14px;padding:12px 14px;margin-bottom:16px}
+.fb-avg-label{font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.fb-stars{display:flex;align-items:center;gap:6px}
+.fb-stars svg{width:15px;height:15px}
+.fb-stars-val{font-size:13px;font-weight:700}
+.fb-card-btn{width:100%;padding:11px;border:none;border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;justify-content:center;gap:6px;transition:background .15s}
+.fb-card-btn.pending{background:var(--red);color:#fff}
+.fb-card-btn.pending:hover{background:#d02a14}
+.fb-card-btn.completed{background:var(--gray-100);color:var(--gray-700)}
+.fb-card-btn.completed:hover{background:var(--gray-300)}
+.fb-card-btn svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.fb-card-btn.completed svg{stroke:var(--gray-700)}
+.fb-empty{background:var(--white);border:2px dashed var(--gray-300);border-radius:28px;padding:64px 32px;text-align:center}
+.fb-empty svg{width:44px;height:44px;stroke:var(--gray-300);fill:none;margin:0 auto 12px}
+.fb-empty p{font-size:13px;color:var(--gray-300);font-weight:500}
+
+/* FEEDBACK MODAL */
+.fb-modal-body{padding:0;display:flex;flex-direction:column;max-height:88vh}
+.fb-modal-head{padding:28px 32px 20px;border-bottom:1px solid #F3F4F6;flex-shrink:0}
+.fb-modal-scroll{flex:1;overflow-y:auto;padding:24px 32px}
+.fb-modal-foot{padding:20px 32px;border-top:1px solid #F3F4F6;background:var(--gray-50);flex-shrink:0;border-radius:0 0 36px 36px}
+.fb-q-card{background:var(--gray-50);border-radius:20px;padding:22px;margin-bottom:16px}
+.fb-q-cat{font-size:10px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.12em;margin-bottom:5px}
+.fb-q-text{font-size:14px;font-weight:600;color:var(--gray-900);margin-bottom:18px;line-height:1.45}
+.fb-rating{display:flex;gap:8px}
+.fb-rating-btn{flex:1;aspect-ratio:1;border-radius:14px;border:2px solid #EAECF0;background:var(--white);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:all .15s;padding:10px}
+.fb-rating-btn:hover:not(:disabled){border-color:var(--red-mid);background:var(--red-light)}
+.fb-rating-btn.selected{border-color:var(--red);background:var(--red);box-shadow:var(--shadow-red);transform:scale(1.06)}
+.fb-rating-btn:disabled{cursor:default}
+.fb-rating-num{font-size:18px;font-weight:700;color:var(--gray-600);line-height:1}
+.fb-rating-btn.selected .fb-rating-num{color:#fff}
+.fb-rating-star svg{width:16px;height:16px;fill:none;stroke:var(--gray-300);stroke-width:2}
+.fb-rating-btn.selected .fb-rating-star svg{stroke:#fff;fill:rgba(255,255,255,.4)}
+.fb-rating-labels{display:flex;justify-content:space-between;font-size:10.5px;color:var(--gray-300);font-weight:500;margin-top:8px;padding:0 2px}
+.fb-modal-foot-actions{display:flex;gap:12px}
+.fb-done-badge{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;background:#DCFCE7;color:#15803D;border-radius:14px;font-size:13px;font-weight:700}
+.fb-done-badge svg{width:18px;height:18px;fill:none;stroke:#15803D;stroke-width:2.5}
+
+/* HR DASHBOARD */
+.hr-page{max-width:1280px;margin:0 auto;padding:40px 32px 80px}
+.hr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:16px}
+.hr-title h2{font-size:22px;font-weight:700;margin-bottom:4px}
+.hr-title p{font-size:13.5px;color:var(--gray-500)}
+.btn-run{padding:12px 28px;background:var(--red);color:#fff;border:none;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans);box-shadow:var(--shadow-red);transition:background .15s;display:flex;align-items:center;gap:8px}
+.btn-run:hover:not(:disabled){background:#d02a14}
+.btn-run:disabled{opacity:.6;cursor:not-allowed}
+.btn-run svg{width:16px;height:16px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.hr-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:28px}
+@media(max-width:768px){.hr-stats{grid-template-columns:1fr}}
+.hr-stat{background:var(--white);border:1px solid #EAECF0;border-radius:20px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+.hr-stat-label{font-size:12px;font-weight:600;color:var(--gray-500);margin-bottom:4px}
+.hr-stat-num{font-size:28px;font-weight:700}
+.hr-stat-num.red{color:var(--red)}
+.hr-stat-num.orange{color:#F59E0B}
+.hr-stat-num.green{color:#22C55E}
+.hr-stat-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hr-stat-icon.red{background:var(--red-light)}
+.hr-stat-icon.orange{background:#FFF7ED}
+.hr-stat-icon.green{background:#F0FDF4}
+.hr-stat-icon svg{width:20px;height:20px;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.hr-stat-icon.red svg{stroke:var(--red)}
+.hr-stat-icon.orange svg{stroke:#F59E0B}
+.hr-stat-icon.green svg{stroke:#22C55E}
+.hr-table-wrap{background:var(--white);border:1px solid #EAECF0;border-radius:20px;overflow:hidden}
+.hr-table{width:100%;border-collapse:collapse}
+.hr-table thead{background:var(--gray-50)}
+.hr-table th{padding:14px 20px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid #EAECF0}
+.hr-table td{padding:16px 20px;font-size:13.5px;border-bottom:1px solid #F3F4F6;vertical-align:middle}
+.hr-table tr:last-child td{border-bottom:none}
+.hr-table tr:hover td{background:var(--gray-50)}
+.emp-name{font-weight:700;color:var(--gray-900);margin-bottom:2px}
+.emp-meta{font-size:11.5px;color:var(--gray-500);font-weight:500}
+.risk-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.risk-badge.High{background:#FFF0ED;color:var(--red)}
+.risk-badge.Medium{background:#FFF7ED;color:#C2410C}
+.risk-badge.Low{background:#F0FDF4;color:#15803D}
+.risk-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.risk-bar-wrap{display:flex;align-items:center;gap:10px}
+.risk-bar-bg{flex:1;height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden;max-width:120px}
+.risk-bar-fill{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.risk-score-val{font-size:12px;font-weight:700;min-width:36px}
+.hr-empty{padding:64px 32px;text-align:center}
+.hr-empty svg{width:44px;height:44px;stroke:var(--gray-300);fill:none;margin:0 auto 12px;display:block}
+.hr-empty p{font-size:13px;color:var(--gray-300);font-weight:500;margin-bottom:4px}
+.hr-run-info{font-size:12px;color:var(--gray-500);font-weight:500;margin-top:6px}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <div class="nav-logo">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <span class="nav-name">Careers @ HR Manager</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchPage('careers')">Careers</button>
+      <button class="nav-tab" onclick="switchPage('feedback')">Feedback</button>
+      <button class="nav-tab" onclick="switchPage('dashboard')">HR Dashboard</button>
+    </div>
+    <div id="nav-actions">
+      <button class="btn-ghost" onclick="openAuth()">Log In</button>
+      <button class="btn-primary" onclick="openAuth()">Join Us</button>
+    </div>
+  </div>
+</nav>
+
+<!-- PAGE: CAREERS -->
+<div class="page active" id="page-careers">
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Build the future of HR tech <em>with us.</em></h1>
+    <p>Join a team of visionaries redefining how people work, grow, and succeed together.</p>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" type="text" id="search-input" placeholder="Search by role or department…" oninput="filterJobs()">
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<div class="main">
+  <div>
+    <div class="jobs-header">
+      <div class="jobs-count" id="jobs-count">Loading…</div>
+      <select class="dept-select" id="dept-select" onchange="filterJobs()">
+        <option value="">All Departments</option>
+        <option value="Engineering">Engineering</option>
+        <option value="Design">Design</option>
+        <option value="Product">Product</option>
+      </select>
+    </div>
+    <div class="jobs-grid" id="jobs-grid">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="sidebar-empty" id="sidebar-empty">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+      </div>
+      <p style="font-size:12px;font-weight:700;color:var(--gray-300);text-transform:uppercase;letter-spacing:.1em">No Selection</p>
+      <p style="font-size:12px;color:var(--gray-300);font-weight:500">Select a job to view details and apply</p>
+    </div>
+    <div class="sidebar-card" id="sidebar-card"></div>
+  </aside>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="overlay" id="auth-modal">
+  <div class="modal">
+    <div class="modal-body">
+      <div class="modal-head">
+        <div class="modal-title-wrap">
+          <div class="modal-icon red">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M20 21a8 8 0 10-16 0"/></svg>
+          </div>
+          <div class="modal-h3">Get Started</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('auth-modal')">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active">Log In</button>
+        <button class="auth-tab">Sign Up</button>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Email Address</label>
+        <input class="form-input" type="email" id="auth-email" placeholder="name@example.com">
+      </div>
+      <div class="form-field">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" placeholder="••••••••">
+      </div>
+      <button class="btn-submit" style="width:100%;margin-top:8px" onclick="submitAuth()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- APPLY MODAL -->
+<div class="overlay" id="apply-modal">
+  <div class="modal modal-lg">
+    <div class="modal-body" id="apply-body"></div>
+  </div>
+</div>
+
+</div><!-- end page-careers -->
+
+<!-- PAGE: FEEDBACK -->
+<div class="page" id="page-feedback">
+  <div class="fb-page">
+
+    <!-- Stats -->
+    <div style="margin-bottom:20px">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:4px">Feedback Forms</h2>
+      <p style="font-size:13.5px;color:var(--gray-500)">Complete satisfaction surveys and view past submissions</p>
+    </div>
+
+    <div class="fb-stats" id="fb-stats">
+      <div class="fb-stat red">
+        <div><div class="fb-stat-label">Pending Forms</div><div class="fb-stat-num" id="fb-count-pending">—</div></div>
+        <div class="fb-stat-icon"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+      </div>
+      <div class="fb-stat green">
+        <div><div class="fb-stat-label">Completed</div><div class="fb-stat-num" id="fb-count-completed">—</div></div>
+        <div class="fb-stat-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      </div>
+      <div class="fb-stat blue">
+        <div><div class="fb-stat-label">Total Forms</div><div class="fb-stat-num" id="fb-count-total">—</div></div>
+        <div class="fb-stat-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="fb-filter">
+      <button class="fb-filter-btn active" onclick="filterForms('all',this)">All Forms</button>
+      <button class="fb-filter-btn" onclick="filterForms('pending',this)">Pending</button>
+      <button class="fb-filter-btn" onclick="filterForms('completed',this)">Completed</button>
+    </div>
+
+    <!-- Cards grid -->
+    <div class="fb-grid" id="fb-grid">
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+
+  </div>
+</div><!-- end page-feedback -->
+
+<!-- FEEDBACK FORM MODAL -->
+<div class="overlay" id="fb-modal">
+  <div class="modal modal-lg" style="border-radius:36px;overflow:hidden">
+    <div class="fb-modal-body" id="fb-modal-body"></div>
+  </div>
+</div>
+
+<!-- PAGE: HR DASHBOARD -->
+<div class="page" id="page-dashboard">
+  <div class="hr-page">
+
+    <!-- Header -->
+    <div class="hr-header">
+      <div class="hr-title">
+        <h2>Attrition Risk Dashboard</h2>
+        <p>Run predictions based on the latest completed feedback submissions</p>
+      </div>
+      <div>
+        <button class="btn-run" id="btn-run" onclick="runPrediction()">
+          <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Run Prediction
+        </button>
+        <div class="hr-run-info" id="hr-run-info" style="text-align:right"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="hr-stats">
+      <div class="hr-stat">
+        <div>
+          <div class="hr-stat-label">High Risk</div>
+          <div class="hr-stat-num red" id="hr-count-high">—</div>
+        </div>
+        <div class="hr-stat-icon red">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+      </div>
+      <div class="hr-stat">
+        <div>
+          <div class="hr-stat-label">Medium Risk</div>
+          <div class="hr-stat-num orange" id="hr-count-medium">—</div>
+        </div>
+        <div class="hr-stat-icon orange">
+          <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+      </div>
+      <div class="hr-stat">
+        <div>
+          <div class="hr-stat-label">Low Risk</div>
+          <div class="hr-stat-num green" id="hr-count-low">—</div>
+        </div>
+        <div class="hr-stat-icon green">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="hr-table-wrap">
+      <table class="hr-table">
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Job Title</th>
+            <th>Department</th>
+            <th>Team</th>
+            <th>Risk Level</th>
+            <th>Risk Score</th>
+          </tr>
+        </thead>
+        <tbody id="hr-table-body">
+          <tr>
+            <td colspan="6">
+              <div class="hr-empty">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <p>No predictions yet</p>
+                <p style="font-size:11.5px;color:var(--gray-300)">Click "Run Prediction" to analyse attrition risk</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</div><!-- end page-dashboard -->
+
+<!-- TOAST CONTAINER -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<script>
+const API = 'http://127.0.0.1:8000/api';
+let allJobs = [];
+let selectedJob = null;
+let isLoggedIn = false;
+let pendingJob = null;
+let selectedFile = null;
+let userEmail = '';
+
+// ── LOAD JOBS ──────────────────────────────────────────────────────────────
+async function loadJobs() {
+  try {
+    const r = await fetch(API + '/jobs/');
+    if (!r.ok) throw new Error('API error ' + r.status);
+    allJobs = await r.json();
+    if (!Array.isArray(allJobs)) allJobs = [];
+  } catch(e) {
+    showToast('Cannot reach API — is the server running?', 'error');
+    allJobs = [];
+  }
+  renderJobs();
+}
+
+function filterJobs() {
+  renderJobs();
+}
+
+function renderJobs() {
+  const q    = document.getElementById('search-input').value.toLowerCase();
+  const dept = document.getElementById('dept-select').value;
+  const list = allJobs.filter(j =>
+    (!q    || j.title.toLowerCase().includes(q) || (j.department||'').toLowerCase().includes(q)) &&
+    (!dept || (j.department||'') === dept)
+  );
+
+  document.getElementById('jobs-count').textContent =
+    list.length + ' Open Position' + (list.length !== 1 ? 's' : '');
+
+  const grid = document.getElementById('jobs-grid');
+  if (!list.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:64px;color:var(--gray-300);font-weight:600">No positions found.</div>';
+    return;
+  }
+
+  grid.innerHTML = list.map(j => `
+    <div class="job-card${selectedJob?.id===j.id?' active':''}" onclick="selectJob(${j.id})">
+      <div class="card-top">
+        <div>
+          <div class="card-title">${j.title}</div>
+          <div class="card-dept">${j.department||'General'}</div>
+        </div>
+        <div class="card-chevron">
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+      <div class="card-meta">
+        <div class="meta-item">
+          <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          ${j.location||'Remote'}
+        </div>
+        <div class="meta-item">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          ${j.type||'Full-time'}
+        </div>
+      </div>
+      <div class="card-footer">
+        <span class="card-salary">${j.salary||('Req. ' + (j.min_experience_years||0) + '+ yrs')}</span>
+        <button class="btn-apply-sm" onclick="event.stopPropagation();startApply(${j.id})">Apply Now</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectJob(id) {
+  selectedJob = allJobs.find(j => j.id === id) || null;
+  renderJobs();
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const empty  = document.getElementById('sidebar-empty');
+  const card   = document.getElementById('sidebar-card');
+  if (!selectedJob) {
+    empty.style.display = 'flex';
+    card.style.display  = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  card.style.display  = 'block';
+  const j = selectedJob;
+  const reqs = (j.requirements||j.required_skills||[]).slice(0,5)
+    .map(r => `<li><div class="req-dot"></div><span>${r}</span></li>`).join('');
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span class="sidebar-badge">JP-${String(j.id).padStart(3,'0')}</span>
+      <span style="font-size:11.5px;color:var(--gray-500);font-weight:500">${j.created_at ? j.created_at.slice(0,10) : 'Recently'}</span>
+    </div>
+    <div class="sidebar-title">${j.title}</div>
+    <p class="sidebar-desc">${j.description}</p>
+    <div class="req-section-title">
+      <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Requirements
+    </div>
+    <ul class="req-list">${reqs || '<li><div class="req-dot"></div><span>See full description</span></li>'}</ul>
+    <button class="btn-apply-full" onclick="startApply(${j.id})">
+      Apply Now
+      <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <p class="sidebar-footer">We are an equal opportunity employer and value diversity.</p>
+  `;
+}
+
+// ── AUTH ───────────────────────────────────────────────────────────────────
+function openAuth() {
+  openModal('auth-modal');
+}
+
+function submitAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  if (!email) { showToast('Please enter your email', 'error'); return; }
+  userEmail   = email;
+  isLoggedIn  = true;
+  closeModal('auth-modal');
+  showToast('Welcome back!', 'success');
+  document.getElementById('nav-actions').innerHTML = `
+    <button class="btn-ghost">My Applications</button>
+    <div class="avatar">${email[0].toUpperCase()}</div>
+  `;
+  if (pendingJob !== null) { openApplyModal(pendingJob); pendingJob = null; }
+}
+
+// ── APPLY ──────────────────────────────────────────────────────────────────
+function startApply(id) {
+  selectedJob = allJobs.find(j => j.id === id) || selectedJob;
+  renderSidebar();
+  if (!isLoggedIn) { pendingJob = id; openAuth(); return; }
+  openApplyModal(id);
+}
+
+function openApplyModal(id) {
+  selectedJob = allJobs.find(j => j.id === id) || selectedJob;
+  selectedFile = null;
+  renderApplyForm();
+  openModal('apply-modal');
+}
+
+function renderApplyForm() {
+  document.getElementById('apply-body').innerHTML = `
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="modal-icon soft">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div>
+          <div class="modal-h3">Application Form</div>
+          <div class="modal-sub">Applying for ${selectedJob.title}</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('apply-modal')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="upload-zone" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept=".pdf" style="display:none" onchange="handleFile(event)">
+      <div class="upload-icon-wrap">
+        <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+      </div>
+      <div>
+        <div class="upload-title">Upload your Resume</div>
+        <div class="upload-sub">PDF only · max 10 MB</div>
+        <div class="upload-filename" id="upload-filename"></div>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div>
+        <label class="form-label">Full Name</label>
+        <input class="form-input" type="text" id="f-name" placeholder="Jane Smith">
+      </div>
+      <div>
+        <label class="form-label">Phone Number</label>
+        <input class="form-input" type="tel" id="f-phone" placeholder="+1 555 000 0000">
+      </div>
+      <div class="col-2">
+        <label class="form-label">Portfolio / LinkedIn URL</label>
+        <input class="form-input" type="url" id="f-url" placeholder="https://linkedin.com/in/…">
+      </div>
+      <div class="col-2">
+        <label class="form-label">Cover Letter <span style="font-weight:400;color:var(--gray-300)">(Optional)</span></label>
+        <textarea class="form-textarea" id="f-cover" placeholder="Tell us why you're a great fit…"></textarea>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('apply-modal')">Cancel</button>
+      <button class="btn-submit" id="submit-btn" onclick="submitApplication()">Submit Application</button>
+    </div>
+  `;
+}
+
+function handleFile(e) {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (!f.name.toLowerCase().endsWith('.pdf')) { showToast('Only PDF files accepted', 'error'); return; }
+  if (f.size > 10 * 1024 * 1024) { showToast('File too large (max 10MB)', 'error'); return; }
+  selectedFile = f;
+  document.getElementById('upload-filename').textContent = '📄 ' + f.name;
+}
+
+async function submitApplication() {
+  if (!selectedFile) { showToast('Please upload your PDF resume first', 'error'); return; }
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { showToast('Please enter your full name', 'error'); return; }
+
+  // Show loading
+  document.getElementById('apply-body').innerHTML = `
+    <div class="loading-text">
+      <div class="spinner"></div>
+      <p>Extracting skills, experience & education…</p>
+      <small>Running semantic similarity model — this may take 30 seconds</small>
+    </div>
+  `;
+
+  const fd = new FormData();
+  fd.append('job',             selectedJob.id);
+  fd.append('resume_file',     selectedFile, selectedFile.name);
+  fd.append('candidate_name',  name);
+  fd.append('candidate_email', userEmail);
+
+  try {
+    const r    = await fetch(API + '/submit/', { method: 'POST', body: fd });
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = typeof data === 'object' ? JSON.stringify(data) : data;
+      throw new Error(msg);
+    }
+    renderResults(data);
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    renderApplyForm();
+  }
+}
+
+function renderResults(d) {
+  const ats   = d.ats_score ?? 0;
+  const color = ats >= 70 ? '#22C55E' : ats >= 45 ? '#E8321A' : '#EF4444';
+  const jobSkills = new Set((selectedJob?.required_skills || []).map(s => s.toLowerCase()));
+
+  document.getElementById('apply-body').innerHTML = `
+    <div class="modal-head" style="margin-bottom:20px">
+      <div class="modal-title-wrap">
+        <div class="modal-icon soft">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div>
+          <div class="modal-h3">Pipeline Results</div>
+          <div class="modal-sub">${d.candidate_name||'Candidate'} · ${selectedJob.title}</div>
+        </div>
+      </div>
+      <button class="modal-close" onclick="closeModal('apply-modal')">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="ats-hero">
+      <div class="ats-label">ATS Match Score</div>
+      <div class="ats-number" style="color:${color}">${ats.toFixed(1)}</div>
+      <div class="ats-bar-bg"><div class="ats-bar-fill" id="ats-bar" style="background:${color}"></div></div>
+    </div>
+
+    <div class="dim-rows">
+      ${dim('Skills Match',       d.skills_score,     '#E8321A')}
+      ${dim('Experience',         d.experience_score, '#3B82F6')}
+      ${dim('Education',          d.education_score,  '#F59E0B')}
+      ${dim('Semantic Fit',       d.semantic_score,   '#10B981')}
+    </div>
+
+    <div class="result-chips">
+      <div class="chip"><div class="chip-label">Degree</div><div class="chip-value">${d.candidate_degree||'—'}</div></div>
+      <div class="chip"><div class="chip-label">Experience</div><div class="chip-value">${d.candidate_years_exp??'—'} yrs</div></div>
+      <div class="chip"><div class="chip-label">Skills Found</div><div class="chip-value">${(d.candidate_skills||[]).length}</div></div>
+      <div class="chip"><div class="chip-label">Method</div><div class="chip-value" style="font-size:11px">${(d.exp_extraction_method||'—').replace(/_/g,' ')}</div></div>
+    </div>
+
+    <div>
+      <div class="skills-title">
+        Candidate Skills
+        <span class="skills-legend">■ red = matched JD requirement</span>
+      </div>
+      <div class="pills-wrap">
+        ${(d.candidate_skills||[]).sort().map(s =>
+          `<span class="pill${jobSkills.has(s.toLowerCase())?' match':''}">${s}</span>`
+        ).join('')}
+      </div>
+    </div>
+  `;
+
+  // Animate bars after paint
+  requestAnimationFrame(() => setTimeout(() => {
+    document.getElementById('ats-bar').style.width = ats + '%';
+    document.querySelectorAll('.dim-fill[data-v]').forEach(el => {
+      el.style.width = el.dataset.v + '%';
+    });
+  }, 60));
+}
+
+function dim(label, val, color) {
+  const v = (val ?? 0).toFixed(1);
+  return `<div class="dim-row">
+    <div class="dim-hd">
+      <span class="dim-name">${label}</span>
+      <span class="dim-val">${v}%</span>
+    </div>
+    <div class="dim-track">
+      <div class="dim-fill" data-v="${val??0}" style="background:${color}"></div>
+    </div>
+  </div>`;
+}
+
+// ── MODAL HELPERS ──────────────────────────────────────────────────────────
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// Close on overlay click
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('show'); });
+});
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+function showToast(msg, type='success') {
+  const icons = {
+    success: '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error:   '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+  };
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.innerHTML = icons[type] + msg;
+  document.getElementById('toast-wrap').appendChild(t);
+  setTimeout(() => { t.style.animation = 'toastOut .25s forwards'; setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+// ── PAGE SWITCHER ──────────────────────────────────────────────────────────
+function switchPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (page === 'feedback') loadFeedbackForms();
+}
+
+// ── FEEDBACK ───────────────────────────────────────────────────────────────
+const FB_API      = 'http://127.0.0.1:8000/api/feedback';
+const EMPLOYEE_ID = '09461b4c8c244ab2b566';   // replace with real auth user id when auth is added
+let   allForms    = [];
+let   activeFilter = 'all';
+
+async function loadFeedbackForms() {
+  try {
+    const r    = await fetch(`${FB_API}/forms/?employee_id=${EMPLOYEE_ID}`);
+    const data = await r.json();
+    allForms   = data;
+    renderFeedbackStats();
+    renderFeedbackGrid();
+  } catch(e) {
+    document.getElementById('fb-grid').innerHTML =
+      '<p style="color:var(--gray-300);font-size:13px">Could not load forms. Is the server running?</p>';
+  }
+}
+
+function renderFeedbackStats() {
+  // A form is "pending" for this employee if they have no completed submission
+  const pending   = allForms.filter(f => !f.submission || f.submission.status === 'Pending').length;
+  const completed = allForms.filter(f => f.submission && f.submission.status === 'Completed').length;
+  document.getElementById('fb-count-pending').textContent   = pending;
+  document.getElementById('fb-count-completed').textContent = completed;
+  document.getElementById('fb-count-total').textContent     = allForms.length;
+}
+
+function filterForms(filter, btn) {
+  activeFilter = filter;
+  document.querySelectorAll('.fb-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderFeedbackGrid();
+}
+
+function getFormStatus(form) {
+  // Derive status from the employee's submission
+  if (form.submission && form.submission.status === 'Completed') return 'completed';
+  return 'pending';
+}
+
+function renderFeedbackGrid() {
+  const filtered = activeFilter === 'all'
+    ? allForms
+    : allForms.filter(f => getFormStatus(f) === activeFilter);
+
+  const grid = document.getElementById('fb-grid');
+
+  if (!filtered.length) {
+    grid.innerHTML = `
+      <div class="fb-empty" style="grid-column:1/-1">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>No ${activeFilter === 'all' ? '' : activeFilter} feedback forms found</p>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(form => {
+    const status     = getFormStatus(form);
+    const isPending  = status === 'pending';
+    const submittedAt = form.submission && form.submission.submittedAt
+      ? new Date(form.submission.submittedAt).toLocaleDateString()
+      : null;
+    const dateLabel  = isPending
+      ? 'Not yet submitted'
+      : 'Completed: ' + (submittedAt || 'N/A');
+
+    return `
+      <div class="fb-card ${isPending ? 'pending' : ''}" onclick="openFeedbackForm('${form.formID}')">
+        <div class="fb-card-top">
+          <div class="fb-card-icon ${isPending ? 'pending' : 'completed'}">
+            ${isPending
+              ? '<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+              : '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'}
+          </div>
+          <span class="fb-badge ${isPending ? 'pending' : 'completed'}">${isPending ? 'Pending' : 'Completed'}</span>
+        </div>
+        <h3>${form.title}</h3>
+        <p style="font-size:12px;color:var(--gray-500);font-weight:500;margin-bottom:6px">${form.questionCount} questions</p>
+        <div class="fb-card-meta">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          ${dateLabel}
+        </div>
+        <button class="fb-card-btn ${isPending ? 'pending' : 'completed'}">
+          ${isPending ? 'Fill Form' : 'View Responses'}
+          <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>`;
+  }).join('');
+}
+
+async function openFeedbackForm(formId) {
+  openModal('fb-modal');
+  document.getElementById('fb-modal-body').innerHTML = `
+    <div style="padding:48px;text-align:center">
+      <div class="spinner"></div>
+      <p style="font-size:13px;color:var(--gray-500);font-weight:500">Loading form...</p>
+    </div>`;
+
+  try {
+    const r    = await fetch(`${FB_API}/forms/${formId}/?employee_id=${EMPLOYEE_ID}`);
+    const form = await r.json();
+    renderFeedbackModal(form);
+  } catch(e) {
+    document.getElementById('fb-modal-body').innerHTML =
+      '<p style="padding:32px;color:var(--gray-500)">Failed to load form.</p>';
+  }
+}
+
+function renderFeedbackModal(form) {
+  const isPending = !form.submission || form.submission.status === 'Pending';
+
+  // Build saved answers map: { questionID: {scoreValue, booleanValue, decimalValue} }
+  const savedAnswers = {};
+  if (form.submission && form.submission.answers) {
+    form.submission.answers.forEach(a => {
+      savedAnswers[a.questionID] = a;
+    });
+  }
+  window._fbAnswers  = Object.assign({}, savedAnswers);
+  window._fbFormId   = form.formID;
+  window._fbQCount   = form.questions.length;
+
+  const questionsHtml = form.questions.map((q, i) => {
+    const saved = savedAnswers[q.questionID];
+
+    // Render input based on fieldType
+    let inputHtml = '';
+
+    if (q.fieldType === 'score_1_4') {
+      inputHtml = `
+        <div class="fb-rating" id="rating-${q.questionID}">
+          ${[1,2,3,4].map(s => `
+            <button
+              class="fb-rating-btn ${saved && saved.scoreValue === s ? 'selected' : ''}"
+              onclick="${isPending ? `selectScore('${q.questionID}','scoreValue',${s},this,'rating-${q.questionID}')` : ''}"
+              ${isPending ? '' : 'disabled'}
+            >
+              <div class="fb-rating-num">${s}</div>
+              <div class="fb-rating-star">
+                <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </div>
+            </button>`).join('')}
+        </div>
+        <div class="fb-rating-labels"><span>Poor</span><span>Excellent</span></div>`;
+
+    } else if (q.fieldType === 'boolean') {
+      const yesSelected = saved && saved.booleanValue === true;
+      const noSelected  = saved && saved.booleanValue === false;
+      inputHtml = `
+        <div style="display:flex;gap:12px">
+          <button
+            class="fb-rating-btn ${yesSelected ? 'selected' : ''}"
+            style="max-width:120px;padding:14px"
+            onclick="${isPending ? `selectBoolean('${q.questionID}',true,this)` : ''}"
+            ${isPending ? '' : 'disabled'}
+            id="bool-yes-${q.questionID}"
+          >
+            <div class="fb-rating-num">Yes</div>
+          </button>
+          <button
+            class="fb-rating-btn ${noSelected ? 'selected' : ''}"
+            style="max-width:120px;padding:14px"
+            onclick="${isPending ? `selectBoolean('${q.questionID}',false,this)` : ''}"
+            ${isPending ? '' : 'disabled'}
+            id="bool-no-${q.questionID}"
+          >
+            <div class="fb-rating-num">No</div>
+          </button>
+        </div>`;
+
+    } else if (q.fieldType === 'decimal') {
+      inputHtml = `
+        <input
+          class="form-input"
+          type="number"
+          step="0.1"
+          min="0"
+          placeholder="Enter a number"
+          value="${saved && saved.decimalValue != null ? saved.decimalValue : ''}"
+          id="decimal-${q.questionID}"
+          onchange="${isPending ? `setDecimal('${q.questionID}',this.value)` : ''}"
+          ${isPending ? '' : 'disabled'}
+          style="max-width:200px"
+        >`;
+    }
+
+    return `
+      <div class="fb-q-card">
+        <div class="fb-q-cat">${q.fieldType.replace('_', ' ')}</div>
+        <div class="fb-q-text">${i+1}. ${q.questionText}</div>
+        ${inputHtml}
+      </div>`;
+  }).join('');
+
+  const footerHtml = isPending
+    ? `<div class="fb-modal-foot-actions">
+         <button class="btn-cancel" onclick="closeModal('fb-modal')">Cancel</button>
+         <button class="btn-submit" id="fb-submit-btn" onclick="submitFeedback()">
+           <svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:#fff;fill:none;margin-right:6px"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+           Submit Feedback
+         </button>
+       </div>`
+    : `<div style="text-align:center">
+         <div class="fb-done-badge">
+           <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+           This form has been completed
+         </div>
+       </div>`;
+
+  document.getElementById('fb-modal-body').innerHTML = `
+    <div class="fb-modal-head">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:3px">${form.title}</div>
+          <div style="font-size:12px;color:var(--gray-500);font-weight:500">${form.description || ''}</div>
+        </div>
+        <button class="modal-close" onclick="closeModal('fb-modal')">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="fb-modal-scroll">${questionsHtml}</div>
+    <div class="fb-modal-foot">${footerHtml}</div>`;
+}
+
+function selectScore(questionId, field, value, btn, groupId) {
+  document.getElementById(groupId).querySelectorAll('.fb-rating-btn')
+    .forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  window._fbAnswers[questionId] = { [field]: value };
+}
+
+function selectBoolean(questionId, value, btn) {
+  // Deselect both yes/no buttons
+  const yes = document.getElementById('bool-yes-' + questionId);
+  const no  = document.getElementById('bool-no-'  + questionId);
+  if (yes) yes.classList.remove('selected');
+  if (no)  no.classList.remove('selected');
+  btn.classList.add('selected');
+  window._fbAnswers[questionId] = { booleanValue: value };
+}
+
+function setDecimal(questionId, value) {
+  window._fbAnswers[questionId] = { decimalValue: parseFloat(value) };
+}
+
+async function submitFeedback() {
+  const answers  = window._fbAnswers || {};
+  const formId   = window._fbFormId;
+  const qCount   = window._fbQCount;
+
+  if (Object.keys(answers).length < qCount) {
+    showToast('Please answer all questions before submitting.', 'error');
+    return;
+  }
+
+  // Build answers array matching backend SubmitFeedbackSerializer
+  const answersPayload = Object.entries(answers).map(([questionID, val]) => ({
+    questionID,
+    ...val
+  }));
+
+  const payload = {
+    employeeID: EMPLOYEE_ID,
+    answers: answersPayload
+  };
+
+  const submitBtn = document.getElementById('fb-submit-btn');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+  try {
+    const r = await fetch(`${FB_API}/forms/${formId}/submit/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(JSON.stringify(data));
+
+    showToast('Feedback submitted successfully!', 'success');
+    closeModal('fb-modal');
+    loadFeedbackForms();
+  } catch(e) {
+    showToast('Submission failed: ' + e.message, 'error');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Feedback'; }
+  }
+}
+
+// ── HR DASHBOARD ───────────────────────────────────────────────────────────
+const ATTRITION_API = 'http://127.0.0.1:8000/api/attrition';
+
+async function runPrediction() {
+  const btn  = document.getElementById('btn-run');
+  const info = document.getElementById('hr-run-info');
+  btn.disabled     = true;
+  btn.innerHTML    = '<svg viewBox="0 0 24 24" style="animation:spin .75s linear infinite"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg> Running...';
+  info.textContent = '';
+
+  try {
+    const r    = await fetch(`${ATTRITION_API}/run/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || JSON.stringify(data));
+
+    renderDashboardTable(data.predictions);
+    showToast(`Prediction complete — ${data.totalProcessed} employees analysed`, 'success');
+    info.textContent = `Last run: ${new Date().toLocaleTimeString()} · Form: ${data.formTitle}`;
+  } catch(e) {
+    showToast('Prediction failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled  = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Prediction';
+  }
+}
+
+function renderDashboardTable(predictions) {
+  const tbody = document.getElementById('hr-table-body');
+
+  if (!predictions || !predictions.length) {
+    tbody.innerHTML = `
+      <tr><td colspan="6">
+        <div class="hr-empty">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <p>No results returned</p>
+        </div>
+      </td></tr>`;
+    return;
+  }
+
+  // Sort by risk score descending
+  const sorted = [...predictions].sort((a, b) => b.riskScore - a.riskScore);
+
+  // Update stat counters
+  document.getElementById('hr-count-high').textContent   = sorted.filter(p => p.riskLevel === 'High').length;
+  document.getElementById('hr-count-medium').textContent = sorted.filter(p => p.riskLevel === 'Medium').length;
+  document.getElementById('hr-count-low').textContent    = sorted.filter(p => p.riskLevel === 'Low').length;
+
+  const riskColor = { High: '#E8321A', Medium: '#F59E0B', Low: '#22C55E' };
+
+  tbody.innerHTML = sorted.map(p => {
+    const pct   = Math.round(p.riskScore * 100);
+    const color = riskColor[p.riskLevel] || '#6B7280';
+    return `
+      <tr>
+        <td>
+          <div class="emp-name">${p.fullName || p.employeeID}</div>
+          <div class="emp-meta">${p.employeeID}</div>
+        </td>
+        <td>${p.jobTitle || '<span style="color:var(--gray-300)">—</span>'}</td>
+        <td>${p.department || '<span style="color:var(--gray-300)">—</span>'}</td>
+        <td>${p.team || '<span style="color:var(--gray-300)">—</span>'}</td>
+        <td><span class="risk-badge ${p.riskLevel}">${p.riskLevel}</span></td>
+        <td>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar-bg">
+              <div class="risk-bar-fill" style="width:${pct}%;background:${color}"></div>
+            </div>
+            <span class="risk-score-val" style="color:${color}">${pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+// ── BOOT ───────────────────────────────────────────────────────────────────
+loadJobs();
+</script>
+</body>
+</html>
