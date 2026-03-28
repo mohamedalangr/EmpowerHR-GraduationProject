@@ -1,0 +1,20 @@
+Youssef Mohamed
+Junior Data Specialist | Alexandria, Egypt | youssef@email.com
+
+Summary:
+Entry-level data specialist with skills in reporting and data entry.
+Passionate about statistics and business reporting.
+
+Skills:
+- Excel, Google Sheets
+- SQL (beginner)
+- Data Entry, Data Cleaning
+- Basic Statistics
+
+Experience:
+Data Assistant – DEF Services (2022–2024)
+- Created monthly Excel reports.
+- Assisted in cleaning datasets for analysis.
+
+Education:
+Diploma in Business Analytics – Alexandria Institute (2022)

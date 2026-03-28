@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. PDF TEXT EXTRACTION
+# 1. PDF & TXT TEXT EXTRACTION
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract_text_from_pdf(django_file) -> str:
@@ -22,6 +22,22 @@ def extract_text_from_pdf(django_file) -> str:
     data = django_file.read()
     doc  = fitz.open(stream=data, filetype="pdf")
     return "\n".join(page.get_text("text") for page in doc).strip()
+
+
+def extract_text_from_file(django_file) -> str:
+    """Extract text from PDF or TXT file."""
+    filename = django_file.name.lower()
+    
+    if filename.endswith('.pdf'):
+        return extract_text_from_pdf(django_file)
+    elif filename.endswith('.txt'):
+        # For TXT files, read as text
+        data = django_file.read()
+        if isinstance(data, bytes):
+            return data.decode('utf-8', errors='replace')
+        return str(data)
+    else:
+        raise ValueError(f"Unsupported file type: {filename}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -216,7 +232,7 @@ def run_pipeline(submission):
 
         # ── Extract text ──────────────────────────────────────────────────────
         with submission.resume_file.open("rb") as f:
-            raw_text = extract_text_from_pdf(f)
+            raw_text = extract_text_from_file(submission.resume_file)
         submission.raw_text = raw_text
 
         # ── Skills ───────────────────────────────────────────────────────────

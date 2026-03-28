@@ -56,8 +56,8 @@ class SubmissionUploadSerializer(serializers.ModelSerializer):
         fields = ["job", "candidate_name", "candidate_email", "resume_file"]
 
     def validate_resume_file(self, value):
-        if not value.name.lower().endswith(".pdf"):
-            raise serializers.ValidationError("Only PDF files are accepted.")
+        if not (value.name.lower().endswith(".pdf") or value.name.lower().endswith(".txt")):
+            raise serializers.ValidationError("Only PDF and TXT files are accepted.")
         if value.size > 10 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 10 MB).")
         return value

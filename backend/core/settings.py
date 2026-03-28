@@ -45,7 +45,10 @@ TEMPLATES = [{
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": os.getenv(
+            "SQLITE_DB_NAME",
+            str(Path(os.getenv("LOCALAPPDATA", str(BASE_DIR))) / "Temp" / "EmpowerHR-dev.sqlite3"),
+        ),
     }
 }
 

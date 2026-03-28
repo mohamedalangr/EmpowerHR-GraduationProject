@@ -1,0 +1,21 @@
+Ahmed Hassan
+Data Analyst | Cairo, Egypt | ahmed@email.com
+
+Summary:
+3 years of experience in data analysis, reporting, and visualization.
+Skilled in SQL, Python, and Power BI.
+
+Skills:
+- SQL (Advanced)
+- Python (Pandas, NumPy, Scikit-learn)
+- Power BI, Excel
+- Data Cleaning, ETL
+
+Experience:
+Data Analyst – ABC Company (2021–2024)
+- Built dashboards using Power BI.
+- Automated reports with Python scripts.
+- Reduced reporting time by 40%.
+
+Education:
+B.Sc. in Computer Science – Cairo University (2020)

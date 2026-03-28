@@ -1,13 +1,11 @@
-import { useState, useEffect } from 'react';
-import { api } from '../../api/index.js';
-import { Spinner, Modal, Btn, useToast } from '../../components/shared/index.jsx';
-
-const CAREERS_API = 'http://127.0.0.1:8000/api';
+import { useEffect, useState } from 'react';
+import { getJobs, submitResume } from '../../api/index.js';
+import { Spinner, Modal, Btn } from '../../components/shared/index.jsx';
 
 export function EmployeeCareersPage() {
-  const toast = useToast();
   const [jobs, setJobs]           = useState([]);
   const [loading, setLoading]     = useState(true);
+  const [apiError, setApiError]   = useState('');
   const [selected, setSelected]   = useState(null);
   const [search, setSearch]       = useState('');
   const [showApply, setShowApply] = useState(false);
@@ -18,15 +16,39 @@ export function EmployeeCareersPage() {
   const [result, setResult]       = useState(null);
 
   useEffect(() => {
-    fetch(`${CAREERS_API}/jobs/`)
-      .then(r => r.json())
-      .then(data => { setJobs(Array.isArray(data) ? data : []); setLoading(false); })
-      .catch(() => { toast('Could not reach API', 'error'); setLoading(false); });
+    let cancelled = false;
+
+    const loadJobs = async () => {
+      setLoading(true);
+      setApiError('');
+      try {
+        const data = await getJobs();
+        const nextJobs = Array.isArray(data) ? data : [];
+        if (cancelled) return;
+        setJobs(nextJobs);
+        setSelected(current => current && nextJobs.some(job => job.id === current.id)
+          ? current
+          : (nextJobs[0] || null));
+      } catch {
+        if (cancelled) return;
+        setApiError('Could not reach API');
+      }
+      if (!cancelled) setLoading(false);
+    };
+
+    loadJobs();
+    return () => { cancelled = true; };
   }, []);
 
+  const getSearchText = (job) => [
+    job.title,
+    job.description,
+    job.required_degree,
+    ...(Array.isArray(job.required_skills) ? job.required_skills : []),
+  ].filter(Boolean).join(' ').toLowerCase();
+
   const filtered = jobs.filter(j =>
-    j.title?.toLowerCase().includes(search.toLowerCase()) ||
-    (j.department || '').toLowerCase().includes(search.toLowerCase())
+    getSearchText(j).includes(search.toLowerCase())
   );
 
   const handleApply = async () => {
@@ -41,9 +63,7 @@ export function EmployeeCareersPage() {
     fd.append('candidate_name', name);
     fd.append('candidate_email', email);
     try {
-      const r    = await fetch(`${CAREERS_API}/recruitment/submit/`, { method: 'POST', body: fd });
-      const data = await r.json();
-      if (!r.ok) throw new Error(JSON.stringify(data));
+      const data = await submitResume(fd);
       setResult(data);
     } catch (e) { toast('Error: ' + e.message, 'error'); }
     setSubmitting(false);
@@ -90,18 +110,30 @@ export function EmployeeCareersPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                     <div>
                       <div style={{ fontSize: 17, fontWeight: 700 }}>{j.title}</div>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 4 }}>{j.department || 'General'}</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 4 }}>
+                        {j.required_degree || 'Open Role'}
+                      </div>
                     </div>
                     <div style={{ width: 32, height: 32, background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="16" height="16" fill="none" stroke="var(--gray-400)" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 22 }}>
-                    {[['Remote', 'Remote'], [`${j.min_experience_years || 0}+ yrs exp`, 'Experience']].map(([val]) => (
+                    {[
+                      [j.required_degree || 'Any Degree'],
+                      [`${j.min_experience_years || 0}+ yrs exp`],
+                    ].map(([val]) => (
                       <div key={val} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--gray-500)', fontWeight: 500 }}>
                         <svg width="14" height="14" fill="none" stroke="var(--gray-300)" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
                         {val}
                       </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
+                    {(j.required_skills || []).slice(0, 3).map(skill => (
+                      <span key={skill} style={{ padding: '4px 10px', borderRadius: 9999, background: 'var(--gray-100)', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }}>
+                        {skill}
+                      </span>
                     ))}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 18, borderTop: '1px solid #F3F4F6' }}>
@@ -110,6 +142,15 @@ export function EmployeeCareersPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+          {!loading && apiError && jobs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 24px', background: 'var(--white)', borderRadius: 24, border: '2px dashed var(--gray-300)' }}>
+              <p style={{ fontSize: 13, color: 'var(--red)', fontWeight: 700 }}>{apiError}</p>
+            </div>
+          ) : !loading && filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '48px 24px', background: 'var(--white)', borderRadius: 24, border: '2px dashed var(--gray-300)' }}>
+              <p style={{ fontSize: 13, color: 'var(--gray-500)', fontWeight: 600 }}>No roles match your search right now.</p>
             </div>
           )}
         </div>
@@ -126,7 +167,27 @@ export function EmployeeCareersPage() {
                 JP-{String(selected.id).padStart(3, '0')}
               </span>
               <h2 style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 400, lineHeight: 1.2, marginBottom: 6 }}>{selected.title}</h2>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                <span style={{ padding: '5px 10px', borderRadius: 9999, background: 'var(--gray-100)', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }}>
+                  {selected.required_degree || 'Any Degree'}
+                </span>
+                <span style={{ padding: '5px 10px', borderRadius: 9999, background: 'var(--gray-100)', color: 'var(--gray-500)', fontSize: 11, fontWeight: 700 }}>
+                  {selected.min_experience_years || 0}+ years
+                </span>
+              </div>
               <p style={{ fontSize: 13.5, color: 'var(--gray-500)', lineHeight: 1.65, marginBottom: 22 }}>{selected.description}</p>
+              <div style={{ marginBottom: 22 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 10 }}>
+                  Key Skills
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(selected.required_skills || []).map(skill => (
+                    <span key={skill} style={{ padding: '6px 10px', borderRadius: 9999, background: 'var(--red-light)', color: 'var(--red)', fontSize: 11, fontWeight: 700 }}>
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              </div>
               <Btn onClick={() => { setShowApply(true); setResult(null); }} style={{ width: '100%', padding: 15 }}>
                 Apply Now
                 <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>

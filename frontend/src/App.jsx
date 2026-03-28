@@ -4,6 +4,8 @@ import { ToastContainer }      from './components/shared/index.jsx';
 import { HRFormsPage }         from './pages/hr/FormsPage.jsx';
 import { HRSubmissionsPage }   from './pages/hr/SubmissionsPage.jsx';
 import { HRDashboardPage }     from './pages/hr/DashboardPage.jsx';
+import { HRJobsPage }          from './pages/hr/JobsPage.jsx';
+import { HRCVRankingPage }     from './pages/hr/CVRankingPage.jsx';
 import { EmployeeCareersPage } from './pages/employee/CareersPage.jsx';
 import { EmployeeFeedbackPage } from './pages/employee/FeedbackPage.jsx';
 import './index.css';
@@ -20,9 +22,11 @@ export default function App() {
 
   const renderPage = () => {
     if (role === 'hr') {
+      if (activePage === 'jobs')       return <HRJobsPage />;
       if (activePage === 'forms')       return <HRFormsPage />;
       if (activePage === 'submissions') return <HRSubmissionsPage />;
       if (activePage === 'dashboard')   return <HRDashboardPage />;
+      if (activePage === 'cv-ranking')  return <HRCVRankingPage />;
     } else {
       if (activePage === 'careers')  return <EmployeeCareersPage />;
       if (activePage === 'feedback') return <EmployeeFeedbackPage />;

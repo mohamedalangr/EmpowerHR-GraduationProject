@@ -106,3 +106,12 @@ class SubmissionDetailView(APIView):
         except Submission.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(SubmissionSerializer(sub).data)
+
+    def delete(self, request, pk):
+        try:
+            sub = Submission.objects.get(pk=pk)
+        except Submission.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        sub.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

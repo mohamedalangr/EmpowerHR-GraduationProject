@@ -9,21 +9,39 @@ export function HRSubmissionsPage() {
   const [loading, setLoading]         = useState(true);
   const [expanded, setExpanded]       = useState(null);
 
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    hrGetForms().then(data => {
-      const f = Array.isArray(data) ? data : [];
-      setForms(f);
-      if (f.length > 0) setSelected(f[0].formID);
-    });
+    const loadForms = async () => {
+      setError(null);
+      try {
+        const data = await hrGetForms();
+        const f = Array.isArray(data) ? data : [];
+        setForms(f);
+        if (f.length > 0) setSelected(f[0].formID);
+      } catch (e) {
+        setError('Failed to load forms: ' + (e.message || 'network error'));
+      }
+    };
+    loadForms();
   }, []);
 
   useEffect(() => {
     if (!selectedForm) return;
-    setLoading(true);
-    hrGetSubmissions(selectedForm).then(data => {
-      setSubmissions(Array.isArray(data) ? data : []);
-      setLoading(false);
-    });
+    const loadSubs = async () => {
+      setError(null);
+      setLoading(true);
+      try {
+        const data = await hrGetSubmissions(selectedForm);
+        setSubmissions(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setError('Failed to load submissions: ' + (e.message || 'network error'));
+        setSubmissions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSubs();
   }, [selectedForm]);
 
   const completed = submissions.filter(s => s.status === 'Completed').length;
@@ -45,6 +63,13 @@ export function HRSubmissionsPage() {
           {forms.map(f => <option key={f.formID} value={f.formID}>{f.title}</option>)}
         </select>
       </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ marginBottom: 20, padding: 14, borderRadius: 12, background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA' }}>
+          {error}
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>

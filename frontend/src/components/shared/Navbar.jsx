@@ -2,9 +2,11 @@ import { Btn } from './index.jsx';
 
 export function Navbar({ role, activePage, onNavigate, onSwitchRole }) {
   const hrPages = [
+    { id: 'jobs',        label: 'Jobs' },
     { id: 'forms',       label: 'Forms' },
     { id: 'submissions', label: 'Submissions' },
     { id: 'dashboard',   label: 'Dashboard' },
+    { id: 'cv-ranking',  label: 'CV Ranking' },
   ];
   const employeePages = [
     { id: 'careers',  label: 'Careers' },
