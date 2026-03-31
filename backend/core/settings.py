@@ -13,11 +13,14 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "rest_framework",
     "corsheaders",
     "resume_pipeline",
     'feedback',
-    'attrition'   
+    'attrition',
+    'accounts',
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",  
 ]
 
 MIDDLEWARE = [
@@ -45,10 +48,7 @@ TEMPLATES = [{
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": os.getenv(
-            "SQLITE_DB_NAME",
-            str(Path(os.getenv("LOCALAPPDATA", str(BASE_DIR))) / "Temp" / "EmpowerHR-dev.sqlite3"),
-        ),
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -78,3 +78,36 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LANGUAGE_CODE = "en-us"
 TIME_ZONE     = "UTC"
 USE_TZ        = True
+
+from datetime import timedelta
+
+# --- Custom user model ---
+AUTH_USER_MODEL = "accounts.User"
+
+# --- DRF default auth ---
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+}
+
+# --- JWT configuration ---
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME":  timedelta(minutes=30),   # short-lived
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),        # refreshed silently
+    "ROTATE_REFRESH_TOKENS":  True,   # new refresh token on every refresh call
+    "BLACKLIST_AFTER_ROTATION": True, # old refresh token blacklisted on rotate
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
+}
+
+# --- CORS (React dev server) ---
+# In production replace with your actual frontend domain
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:3000",   # CRA dev server
+]
+CORS_ALLOW_CREDENTIALS = True

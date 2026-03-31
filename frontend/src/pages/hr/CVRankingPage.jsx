@@ -1,707 +1,909 @@
-import { useState, useEffect } from 'react';
-import { deleteSubmission, getJobs, getJobSubmissions, submitResumeAllJobs } from '../../api/index.js';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { Spinner, Btn, Badge, useToast } from '../../components/shared/index.jsx';
-
-const UPLOADED_SUBMISSION_IDS_KEY = 'hr_uploaded_submission_ids';
+import { getJobs, getJobRanking, uploadAndRankCVs, getJobSubmissions } from '../../api/index.js';
 
 export function HRCVRankingPage() {
   const toast = useToast();
-  const [jobs, setJobs] = useState([]);
-  const [candidatesByJobId, setCandidatesByJobId] = useState({}); // { jobId: [submissions] }
-  const [loadingJobs, setLoadingJobs] = useState(true);
-  
-  // Upload state
-  const [uploadFiles, setUploadFiles] = useState([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({});
-  
-  // Results state
-  const [uploadedCandidates, setUploadedCandidates] = useState([]); // All uploaded CVs with scores across jobs
-  const [uploadedSubmissionIds, setUploadedSubmissionIds] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(UPLOADED_SUBMISSION_IDS_KEY);
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+  const fileInputRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 900 : false);
+
+  const [jobs, setJobs]           = useState([]);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [rankings, setRankings]   = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [expandedRank, setExpandedRank] = useState(null);
+  const [fitFilter, setFitFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [shortlistedKeys, setShortlistedKeys] = useState([]);
+  const [compareKeys, setCompareKeys] = useState([]);
+  const [sortBy, setSortBy] = useState('overall');
+  const [rankPhase, setRankPhase] = useState('idle');
+
+  const topCandidate = rankings.length > 0 ? rankings[0] : null;
+
+  const getFitLabel = (score = 0) => {
+    if (score >= 80) return 'Strong Fit';
+    if (score >= 65) return 'Good Fit';
+    if (score >= 50) return 'Moderate Fit';
+    return 'Low Fit';
+  };
+
+  const getFitBand = (score = 0) => {
+    if (score >= 80) return 'strong';
+    if (score >= 65) return 'good';
+    if (score >= 50) return 'moderate';
+    return 'low';
+  };
+
+  const getRankKey = (rank, index) => rank.submission_id || rank.file_name || `${rank.candidate_name || 'candidate'}-${index}`;
+
+  const filteredRankings = rankings.filter((rank, index) => {
+    const key = getRankKey(rank, index);
+    if (!key) return false;
+
+    const score = Number(rank.final_score || 0);
+    const fitBand = getFitBand(score);
+    const source = (rank.source || 'submission').toLowerCase();
+    const candidateName = (rank.candidate_name || rank.file_name || '').toLowerCase();
+    const fileName = (rank.file_name || '').toLowerCase();
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    const fitMatches = fitFilter === 'all' || fitBand === fitFilter;
+    const sourceMatches = sourceFilter === 'all' || source === sourceFilter;
+    const searchMatches = !normalizedSearch || candidateName.includes(normalizedSearch) || fileName.includes(normalizedSearch);
+
+    return fitMatches && sourceMatches && searchMatches;
   });
-  const [selectedJobFilterId, setSelectedJobFilterId] = useState(null); // Filter results by job
-  const [expandedCandidateId, setExpandedCandidateId] = useState(null); // Track expanded row for skill details
 
-  const normalizeSkill = (skill) => String(skill || '')
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ');
+  const sortedFilteredRankings = [...filteredRankings].sort((a, b) => {
+    if (sortBy === 'skills') return (b.skill_match_pct || 0) - (a.skill_match_pct || 0);
+    if (sortBy === 'missing') return (a.missing_skills || []).length - (b.missing_skills || []).length;
+    return (b.final_score || 0) - (a.final_score || 0);
+  });
 
-  // Utility: Parse string skills (comma-separated/newline-separated) or arrays
-  const parseSkills = (skillsData) => {
-    if (!skillsData) return [];
+  const shortlistedCount = shortlistedKeys.length;
 
-    const rawSkills = Array.isArray(skillsData)
-      ? skillsData
-      : typeof skillsData === 'string'
-        ? skillsData.split(/[\n,;|]+/)
-        : [];
+  const compareCandidates = compareKeys
+    .map((key) => sortedFilteredRankings.find((rank, index) => getRankKey(rank, index) === key))
+    .filter(Boolean);
 
-    return [...new Set(
-      rawSkills
-        .map(normalizeSkill)
-        .filter(Boolean)
-    )];
+  const clearRankingFilters = () => {
+    setSearchTerm('');
+    setFitFilter('all');
+    setSourceFilter('all');
+    setSortBy('overall');
   };
 
-  const getCandidateSkills = (candidate) => (
-    candidate?.candidate_skills ||
-    candidate?.extracted_skills ||
-    candidate?.skills ||
-    []
-  );
+  const shortlistTopCandidates = (count = 3) => {
+    const topKeys = sortedFilteredRankings
+      .slice(0, count)
+      .map((rank, index) => getRankKey(rank, index))
+      .filter(Boolean);
 
-  const skillsOverlap = (candidateSkills, requiredSkills) => {
-    const cSkills = parseSkills(candidateSkills);
-    const rSkills = parseSkills(requiredSkills);
-
-    const matched = rSkills.filter(r =>
-      cSkills.some(c => c === r || c.includes(r) || r.includes(c))
-    );
-    const missing = rSkills.filter(r => !matched.includes(r));
-    const extra = cSkills.filter(c =>
-      !rSkills.some(r => c === r || c.includes(r) || r.includes(c))
-    );
-
-    return { candidate: cSkills, required: rSkills, matched, missing, extra };
-  };
-
-  // Utility: Calculate skill match score
-  const calculateSkillMatch = (candidateSkills, requiredSkills) => {
-    const { candidate: cSkills, required: rSkills, matched } = skillsOverlap(candidateSkills, requiredSkills);
-    
-    if (rSkills.length === 0) return 100;
-    if (cSkills.length === 0) return 0;
-    
-    return Math.round((matched.length / rSkills.length) * 100);
-  };
-
-  // Utility: Get skill overlap details
-  const getSkillDetails = (candidateSkills, requiredSkills) => skillsOverlap(candidateSkills, requiredSkills);
-
-  // Load all jobs and their submissions on mount
-  useEffect(() => {
-    const loadJobsAndSubmissions = async () => {
-      setLoadingJobs(true);
-      try {
-        const jobsData = await getJobs();
-        setJobs(Array.isArray(jobsData) ? jobsData : []);
-        
-        // Load submissions for each job
-        const submissionsByJob = {};
-        if (Array.isArray(jobsData)) {
-          for (const job of jobsData) {
-            try {
-              const subs = await getJobSubmissions(job.id);
-              submissionsByJob[job.id] = Array.isArray(subs) ? subs : [];
-            } catch (e) {
-              submissionsByJob[job.id] = [];
-            }
-          }
-        }
-        setCandidatesByJobId(submissionsByJob);
-      } catch (e) {
-        toast('Failed to load jobs', 'error');
-      }
-      setLoadingJobs(false);
-    };
-    loadJobsAndSubmissions();
-  }, []);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(UPLOADED_SUBMISSION_IDS_KEY, JSON.stringify(uploadedSubmissionIds));
-    } catch {
-      // Ignore localStorage write issues in restricted environments
-    }
-  }, [uploadedSubmissionIds]);
-
-  // Extract candidate info from file text
-  const extractCandidateInfo = (text) => {
-    let name = '';
-    let email = '';
-    
-    // Extract email (pattern: text@domain.com)
-    const emailMatch = text.match(/([a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-    if (emailMatch) email = emailMatch[1];
-    
-    // Extract name (first line or first capitalized word sequence)
-    const lines = text.split('\n').filter(l => l.trim());
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
-      const line = lines[i].trim();
-      if (line.length > 2 && line.length < 100 && !line.includes('@')) {
-        const words = line.split(/\s+/);
-        if (words.length <= 4 && words.every(w => /^[A-Z][a-z]*$/.test(w) || /^[A-Z]\.?$/.test(w))) {
-          name = line;
-          break;
-        }
-      }
-    }
-    
-    return { name, email };
-  };
-
-  const handleFileSelection = async (e) => {
-    const files = Array.from(e.target.files || []);
-    const newFiles = [];
-
-    for (const file of files) {
-      let text = '';
-      
-      if (file.type === 'text/plain') {
-        text = await file.text();
-      } else if (file.name.endsWith('.pdf')) {
-        // For PDF, we'll let backend handle extraction
-        text = '';
-      }
-      
-      const { name, email } = text ? extractCandidateInfo(text) : { name: '', email: '' };
-      newFiles.push({
-        file,
-        candidateName: name,
-        candidateEmail: email,
-      });
-      setUploadProgress(p => ({ ...p, [file.name]: { status: 'pending', score: 0 } }));
-    }
-    
-    setUploadFiles(prev => [...prev, ...newFiles]);
-  };
-
-  const updateFileInfo = (index, field, value) => {
-    setUploadFiles(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      return updated;
-    });
-  };
-
-  const removeFile = (index) => {
-    setUploadFiles(prev => {
-      const updated = prev.filter((_, i) => i !== index);
-      return updated;
-    });
-  };
-
-  const handleBatchUploadAllJobs = async () => {
-    if (uploadFiles.length === 0) { toast('No files to upload', 'error'); return; }
-    if (jobs.length === 0) { toast('No jobs available', 'error'); return; }
-    
-    setUploading(true);
-    let newCandidates = [];
-    let successCount = 0;
-
-    for (let i = 0; i < uploadFiles.length; i++) {
-      const { file, candidateName, candidateEmail } = uploadFiles[i];
-      const fileName = file.name;
-      
-      setUploadProgress(p => ({ ...p, [fileName]: { status: 'uploading', score: 0 } }));
-      
-      try {
-        // Upload to first job (backend will score it), then we'll manually score against other jobs
-        const formData = new FormData();
-        formData.append('job', jobs[0].id);
-        formData.append('candidate_name', candidateName || 'Anonymous');
-        formData.append('candidate_email', candidateEmail || '');
-        formData.append('resume_file', file);
-
-        const result = await submitResumeAllJobs(formData);
-        if (result.id || result.ID) {
-          successCount++;
-          
-          // Create candidate profile with scores for this job
-          const candidateRecord = {
-            id: result.id || result.ID,
-            name: candidateName || result.candidate_name || 'Anonymous',
-            email: candidateEmail || result.candidate_email || '',
-            fileName: fileName,
-            submissionId: result.id || result.ID,
-            candidate_skills: result.candidate_skills || result.extracted_skills || result.skills || [],
-            jobScores: {
-              [jobs[0].id]: {
-                atsScore: result.ats_score || 0,
-                skillsScore: result.skills_score || 0,
-                experienceScore: result.experience_score || 0,
-                educationScore: result.education_score || 0,
-                semanticScore: result.semantic_score || 0,
-                status: result.status || 'done',
-              }
-            }
-          };
-          
-          newCandidates.push(candidateRecord);
-          setUploadProgress(p => ({ ...p, [fileName]: { status: 'done', score: result.ats_score || 0 } }));
-        } else {
-          setUploadProgress(p => ({ ...p, [fileName]: { status: 'error', score: 0, message: 'Scoring failed' } }));
-        }
-      } catch (e) {
-        setUploadProgress(p => ({ ...p, [fileName]: { status: 'error', score: 0, message: e.message } }));
-      }
-    }
-
-    setUploading(false);
-    toast(`Uploaded ${successCount}/${uploadFiles.length} CVs successfully`);
-    
-    if (successCount > 0) {
-      // Add to uploaded candidates state
-      setUploadedCandidates(prev => [...prev, ...newCandidates]);
-      setUploadedSubmissionIds(prev => [
-        ...new Set([
-          ...prev,
-          ...newCandidates.map(c => String(c.submissionId || c.id)).filter(Boolean),
-        ]),
-      ]);
-      setUploadFiles([]);
-      setUploadProgress({});
-    }
-  };
-
-  const reloadSubmissions = async (jobsData = jobs) => {
-    const submissionsByJob = {};
-    for (const job of jobsData) {
-      try {
-        const subs = await getJobSubmissions(job.id);
-        submissionsByJob[job.id] = Array.isArray(subs) ? subs : [];
-      } catch {
-        submissionsByJob[job.id] = [];
-      }
-    }
-    setCandidatesByJobId(submissionsByJob);
-  };
-
-  const clearAllResults = async () => {
-    const idsToDelete = [...new Set(
-      uploadedSubmissionIds
-        .map(String)
-        .filter(Boolean)
-    )];
-
-    if (idsToDelete.length === 0) {
-      setUploadFiles([]);
-      setUploadProgress({});
-      setExpandedCandidateId(null);
-      toast('No uploaded submissions to clear', 'error');
+    if (topKeys.length === 0) {
+      toast('No candidates available to shortlist', 'error');
       return;
     }
 
+    setShortlistedKeys(prev => Array.from(new Set([...prev, ...topKeys])));
+    toast(`Top ${topKeys.length} candidates shortlisted`, 'success');
+  };
+
+  const exportShortlist = () => {
+    const rows = rankings
+      .map((rank, index) => ({ rank, index, key: getRankKey(rank, index) }))
+      .filter(item => shortlistedKeys.includes(item.key));
+
+    if (rows.length === 0) {
+      toast('No shortlisted candidates to export', 'error');
+      return;
+    }
+
+    const csvHeader = ['Rank', 'Candidate', 'File', 'Overall Fit', 'Skill Coverage', 'Matched Skills', 'Missing Skills'];
+    const csvRows = rows.map(({ rank, index }) => [
+      `#${index + 1}`,
+      rank.candidate_name || '',
+      rank.file_name || '',
+      `${rank.final_score || 0}%`,
+      `${rank.skill_match_pct || 0}%`,
+      (rank.matched_skills || []).join(' | '),
+      (rank.missing_skills || []).join(' | '),
+    ]);
+
+    const csvContent = [csvHeader, ...csvRows]
+      .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${selectedJob?.title || 'job'}-shortlist.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('Shortlist exported', 'success');
+  };
+
+  const toggleShortlist = (key) => {
+    setShortlistedKeys(prev => prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]);
+  };
+
+  const toggleCompare = (key) => {
+    setCompareKeys(prev => {
+      if (prev.includes(key)) return prev.filter(item => item !== key);
+      if (prev.length >= 2) {
+        toast('You can compare up to 2 candidates', 'error');
+        return prev;
+      }
+      return [...prev, key];
+    });
+  };
+
+  useEffect(() => {
+    loadJobs();
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 900);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (rankingLoading) return;
+    if (rankings.length > 0) {
+      setRankPhase('done');
+      return;
+    }
+    setRankPhase('idle');
+  }, [rankingLoading, rankings.length]);
+
+  const loadJobs = async () => {
+    setLoading(true);
     try {
-      await Promise.all(idsToDelete.map(id => deleteSubmission(id)));
-      await reloadSubmissions();
-      setUploadedCandidates([]);
-      setUploadedSubmissionIds([]);
-      setUploadFiles([]);
-      setUploadProgress({});
-      setExpandedCandidateId(null);
-      toast('Uploaded files removed from comparison');
-    } catch (e) {
-      toast(e.message || 'Failed to clear uploaded files', 'error');
+      const data = await getJobs();
+      const normalizedJobs = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.results)
+          ? data.results
+          : [];
+      setJobs(normalizedJobs);
+      if (!Array.isArray(data) && !Array.isArray(data?.results) && data?.detail) {
+        toast(data.detail, 'error');
+      }
+    } catch (err) {
+      toast('Failed to load jobs', 'error');
+    }
+    setLoading(false);
+  };
+
+  const loadSubmissions = async (jobId) => {
+    try {
+      const data = await getJobSubmissions(jobId);
+      setSubmissions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load submissions:', err);
+      setSubmissions([]);
     }
   };
 
-  // Merge pre-existing candidates from submissions with newly uploaded candidates
-  const allCandidates = (() => {
-    const preExisting = [];
-    
-    // Transform all submissions into candidate format
-    Object.entries(candidatesByJobId).forEach(([jobId, submissions]) => {
-      submissions.forEach(sub => {
-        // Check if this candidate already exists (by email or name+email)
-        const existingIdx = preExisting.findIndex(c => 
-          (c.email && c.email === sub.candidate_email) || 
-          (c.name === sub.candidate_name && c.email === sub.candidate_email)
-        );
-        
-        if (existingIdx >= 0) {
-          // Add this job's score to existing candidate
-          preExisting[existingIdx].jobScores[jobId] = {
-            atsScore: sub.ats_score || 0,
-            skillsScore: sub.skills_score || 0,
-            experienceScore: sub.experience_score || 0,
-            educationScore: sub.education_score || 0,
-            semanticScore: sub.semantic_score || 0,
-          };
-          if (!preExisting[existingIdx].submissionIds) preExisting[existingIdx].submissionIds = [];
-          preExisting[existingIdx].submissionIds.push(sub.id);
-        } else {
-          // New pre-existing candidate
-          preExisting.push({
-            id: `pre-${sub.id}`,
-            name: sub.candidate_name || 'Anonymous',
-            email: sub.candidate_email || '',
-            fileName: `(Pre-existing)`,
-            source: 'pre-existing',
-            submissionIds: [sub.id],
-            candidate_skills: sub.candidate_skills || sub.extracted_skills || sub.skills || [],
-            jobScores: {
-              [jobId]: {
-                atsScore: sub.ats_score || 0,
-                skillsScore: sub.skills_score || 0,
-                experienceScore: sub.experience_score || 0,
-                educationScore: sub.education_score || 0,
-                semanticScore: sub.semantic_score || 0,
-              },
-            },
-          });
-        }
-      });
-    });
-    
-    // Mark newly uploaded candidates
-    const newlyUploaded = uploadedCandidates.map(c => ({
-      ...c,
-      source: 'newly-uploaded',
-      candidate_skills: c.candidate_skills || c.extracted_skills || c.skills || [],
-    }));
-    
-    return [...preExisting, ...newlyUploaded];
-  })();
+  const handleFileChange = (e) => {
+    setUploadedFiles(Array.from(e.target.files));
+  };
 
-  // Get candidates to display (filtered by selected job if applicable)
-  const displayCandidates = selectedJobFilterId 
-    ? allCandidates.filter(c => c.jobScores[selectedJobFilterId])
-    : allCandidates;
+  const handleClearUploadedCVs = () => {
+    setUploadedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    toast('Uploaded CV selection cleared', 'success');
+  };
 
-  // Sort by selected-job skills match first, then ATS score as tie-breaker
-  const sortedCandidates = [...displayCandidates].sort((a, b) => {
-    const jobId = selectedJobFilterId || jobs[0]?.id;
-    const selectedJobData = jobs.find(j => j.id === jobId);
-    const skillsMatchA = selectedJobData ? calculateSkillMatch(getCandidateSkills(a), selectedJobData.required_skills) : 0;
-    const skillsMatchB = selectedJobData ? calculateSkillMatch(getCandidateSkills(b), selectedJobData.required_skills) : 0;
+  const handleRankCVs = async () => {
+    if (!selectedJob) {
+      toast('Please select a job', 'error');
+      return;
+    }
 
-    if (skillsMatchB !== skillsMatchA) return skillsMatchB - skillsMatchA;
-
-    const scoreA = a.jobScores[jobId]?.atsScore || 0;
-    const scoreB = b.jobScores[jobId]?.atsScore || 0;
-    return scoreB - scoreA;
-  });
-
-  const selectedJob = selectedJobFilterId ? jobs.find(j => j.id === selectedJobFilterId) : null;
+    setRankingLoading(true);
+    setRankPhase('collecting');
+    try {
+      let data;
+      if (uploadedFiles.length > 0) {
+        // Upload and rank new CVs
+        const formData = new FormData();
+        uploadedFiles.forEach(file => formData.append('cvs', file));
+        setRankPhase('analyzing');
+        data = await uploadAndRankCVs(selectedJob.id, formData);
+      } else {
+        // Rank existing submissions
+        setRankPhase('analyzing');
+        data = await getJobRanking(selectedJob.id);
+      }
+      setRankings(Array.isArray(data) ? data : []);
+      setExpandedRank(null);
+      if (!Array.isArray(data)) {
+        toast(data?.detail || 'Failed to rank CVs', 'error');
+      }
+    } catch (err) {
+      toast('Failed to rank CVs', 'error');
+      setRankPhase('idle');
+    }
+    setRankingLoading(false);
+  };
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '40px 32px 80px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
+    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px 80px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>CV Ranking - Compare All Jobs</h2>
-          <p style={{ fontSize: 13.5, color: 'var(--gray-500)' }}>Upload candidate CVs and compare against all job postings automatically.</p>
+          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>CV Ranking & Analysis</h2>
+          <p style={{ fontSize: 13.5, color: 'var(--gray-500)' }}>Review ranked candidates and shortlist the best fit for the selected role.</p>
         </div>
       </div>
 
-{/* Upload Section */}
-      <div style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', padding: 20, marginBottom: 24 }}>
-        <h3 style={{ marginBottom: 14, fontSize: 16, fontWeight: 600 }}>📤 Batch Upload CVs</h3>
-        
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--gray-700)' }}>Select Multiple CVs (PDF or TXT)</label>
+      {rankPhase !== 'idle' && (
+        <div style={{
+          marginBottom: 18,
+          borderRadius: 12,
+          border: '1px solid #D0D5DD',
+          background: '#fff',
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ fontSize: 12.5, color: '#344054', fontWeight: 600 }}>
+            Ranking Progress
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={rankPhase === 'collecting' ? 'accent' : rankPhase === 'done' ? 'green' : 'gray'} label="Collecting CVs" />
+            <Badge color={rankPhase === 'analyzing' ? 'accent' : rankPhase === 'done' ? 'green' : 'gray'} label="Analyzing Profiles" />
+            <Badge color={rankPhase === 'done' ? 'green' : 'gray'} label="Ranking Complete" />
+          </div>
+        </div>
+      )}
+
+      {/* Job Selection Card */}
+      <div style={{ background: 'var(--white)', borderRadius: 20, padding: '24px', border: '1px solid #EAECF0', marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: 'var(--gray-900)' }}>Select Job Position</h3>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            Job Position
+          </label>
+          <select
+            value={selectedJob?.id || ''}
+            onChange={(e) => {
+              const job = jobs.find(j => j.id == e.target.value);
+              setSelectedJob(job);
+              setRankings([]);
+              setUploadedFiles([]);
+              setShortlistedKeys([]);
+              setCompareKeys([]);
+              setFitFilter('all');
+              setSourceFilter('all');
+              setSearchTerm('');
+              setSortBy('overall');
+              if (job) {
+                loadSubmissions(job.id);
+              } else {
+                setSubmissions([]);
+              }
+            }}
+            style={{
+              width: '100%', padding: '11px 14px', background: 'var(--gray-100)',
+              border: '2px solid transparent', borderRadius: 12, fontSize: 13.5,
+              outline: 'none', fontFamily: 'var(--sans)', color: 'var(--gray-900)',
+            }}
+          >
+            <option value="">Choose a job position...</option>
+            {jobs.map(job => (
+              <option key={job.id} value={job.id}>{job.title}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* File Upload */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            Upload Additional CVs (Optional)
+          </label>
           <input
+            ref={fileInputRef}
             type="file"
             multiple
             accept=".pdf,.txt"
-            onChange={handleFileSelection}
-            disabled={uploading}
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #EAECF0', fontSize: 13, width: '100%' }}
+            onChange={handleFileChange}
+            style={{
+              width: '100%', padding: '11px 14px', background: 'var(--gray-100)',
+              border: '2px solid transparent', borderRadius: 12, fontSize: 13.5,
+              outline: 'none', fontFamily: 'var(--sans)', color: 'var(--gray-900)',
+            }}
           />
-          <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 6 }}>Files will be scored against all {jobs.length} job postings</p>
+          <p style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>
+            Leave empty to rank existing candidate submissions. Supports PDF and TXT files.
+          </p>
         </div>
 
-        {uploadFiles.length > 0 && (
-          <>
-            <div style={{ marginBottom: 12, maxHeight: 240, overflowY: 'auto', border: '1px solid #EAECF0', borderRadius: 12, padding: 12 }}>
-              {uploadFiles.map((item, idx) => {
-                const progress = uploadProgress[item.file.name];
-                const status = progress?.status || 'pending';
-                
-                return (
-                  <div key={idx} style={{ marginBottom: 10, padding: 10, background: 'var(--gray-50)', borderRadius: 8, border: '1px solid #EAECF0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' }}>{item.file.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>({(item.file.size / 1024).toFixed(1)} KB)</div>
-                      </div>
-                      {status === 'pending' && !uploading && (
-                        <button onClick={() => removeFile(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#999', fontSize: 18 }}>×</button>
-                      )}
-                    </div>
-                    {status === 'pending' && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <input
-                          type="text"
-                          placeholder="Candidate name"
-                          value={item.candidateName}
-                          onChange={e => updateFileInfo(idx, 'candidateName', e.target.value)}
-                          disabled={uploading}
-                          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #EAECF0', fontSize: 12 }}
-                        />
-                        <input
-                          type="email"
-                          placeholder="Email"
-                          value={item.candidateEmail}
-                          onChange={e => updateFileInfo(idx, 'candidateEmail', e.target.value)}
-                          disabled={uploading}
-                          style={{ padding: '8px 10px', borderRadius: 6, border: '1px solid #EAECF0', fontSize: 12 }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+        {uploadedFiles.length > 0 && (
+          <div style={{ marginBottom: 16, padding: 12, background: 'var(--gray-50)', borderRadius: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-700)', marginBottom: 8 }}>
+              Selected Files ({uploadedFiles.length}):
             </div>
-            
-            <div style={{ display: 'flex', gap: 10 }}>
-              <Btn 
-                onClick={handleBatchUploadAllJobs}
-                disabled={uploading}
-                style={{ flex: 1 }}
-              >
-                {uploading ? (
-                  <><Spinner size={14} />&nbsp;Scoring against all jobs...</>
-                ) : (
-                  <>
-                    <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    Upload {uploadFiles.length} & Compare All
-                  </>
-                )}
-              </Btn>
-              <Btn 
-                onClick={() => { setUploadFiles([]); setUploadProgress({}); }}
-                variant="ghost"
-                disabled={uploading}
-              >
-                Clear Queue
-              </Btn>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Results Section */}
-      {loadingJobs ? (
-        <div style={{ textAlign: 'center', padding: 80 }}><Spinner /></div>
-      ) : sortedCandidates.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 48, background: 'var(--white)', borderRadius: 24, border: '2px dashed #EAECF0' }}>
-          <svg width="48" height="48" fill="none" stroke="var(--gray-300)" strokeWidth="1.5" viewBox="0 0 24 24" style={{ margin: '0 auto 16px', display: 'block' }}><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-          <p style={{ fontSize: 14, color: 'var(--gray-400)', fontWeight: 600 }}>No candidates found</p>
-          <p style={{ fontSize: 12, color: 'var(--gray-300)' }}>Upload CVs above or check if there are existing submissions in the system</p>
-        </div>
-      ) : (
-        <>
-          {/* Job Filter */}
-          {jobs.length > 1 && (
-            <div style={{ marginBottom: 20 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-500)', marginBottom: 8, textTransform: 'uppercase' }}>Filter by job:</p>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Btn
-                  variant={!selectedJobFilterId ? 'primary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setSelectedJobFilterId(null)}
-                  style={{ minWidth: 120 }}
-                >
-                  Show All
-                </Btn>
-                {jobs.map(job => (
-                  <Btn
-                    key={job.id}
-                    variant={selectedJobFilterId === job.id ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSelectedJobFilterId(job.id)}
-                    style={{ minWidth: 140 }}
-                  >
-                    {job.title.substring(0, 20)}...
-                  </Btn>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Job Details Panel */}
-          {selectedJob && (
-            <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', borderRadius: 16, padding: 24, marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                <div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: 18, fontWeight: 700 }}>{selectedJob.title}</h3>
-                  <p style={{ margin: '0 0 12px 0', fontSize: 13, opacity: 0.95 }}>{selectedJob.description}</p>
-                  <p style={{ margin: '0 0 4px 0', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', opacity: 0.8 }}>Min Experience</p>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{selectedJob.min_experience_years || 0} years</p>
-                </div>
-                <div>
-                  <p style={{ margin: '0 0 8px 0', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', opacity: 0.8 }}>Required Skills</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {parseSkills(selectedJob.required_skills).map((skill, idx) => (
-                      <span key={idx} style={{ background: 'rgba(255, 255, 255, 0.2)', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Results Table */}
-          <div style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', overflow: 'hidden' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #EAECF0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, marginBottom: 4 }}>Candidate Rankings</h3>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--gray-500)' }}>
-                  {sortedCandidates.length} candidates
-                  {selectedJob && ` • Ranked for: ${selectedJob.title}`}
-                  {sortedCandidates.length > 0 && ` • ${allCandidates.filter(c => c.source === 'pre-existing').length} pre-existing, ${uploadedCandidates.length} newly uploaded`}
-                </p>
-              </div>
-              <Btn variant="ghost" size="sm" onClick={clearAllResults}>
-                Clear Uploaded
-              </Btn>
-            </div>
-
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ background: 'var(--gray-50)' }}>
-                  <tr>
-                    <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0', width: 40 }}></th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>Rank</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>Candidate</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>Email</th>
-                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>Source</th>
-                    {selectedJob && (
-                      <th style={{ padding: '12px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>Skills Match</th>
-                    )}
-                    {jobs.map(job => (
-                      <th key={job.id} style={{ padding: '12px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0', whiteSpace: 'nowrap' }}>
-                        {job.title.substring(0, 16)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedCandidates.map((candidate, idx) => {
-                    const isExpanded = expandedCandidateId === candidate.id;
-                    const selectedJobId = selectedJobFilterId || jobs[0]?.id;
-                    const selectedJobData = jobs.find(j => j.id === selectedJobId);
-                    const candidateSkills = getCandidateSkills(candidate);
-                    const skillMatch = selectedJobData ? calculateSkillMatch(candidateSkills, selectedJobData.required_skills) : 0;
-                    const skillDetails = selectedJobData ? getSkillDetails(candidateSkills, selectedJobData.required_skills) : { matched: [], missing: [], extra: [] };
-                    
-                    return [
-                      <tr key={`row-${candidate.id}`} style={{ borderBottom: '1px solid #F3F4F6' }} onMouseEnter={e => e.currentTarget.style.background = 'var(--gray-50)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <td style={{ padding: '12px 8px', textAlign: 'center', fontSize: 13 }}>
-                          <button 
-                            onClick={() => setExpandedCandidateId(isExpanded ? null : candidate.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#667eea', fontWeight: 700 }}
-                          >
-                            {isExpanded ? '▼' : '▶'}
-                          </button>
-                        </td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)' }}>{idx + 1}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600 }}>{candidate.name || 'Anonymous'}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 12, color: 'var(--gray-500)' }}>{candidate.email || '—'}</td>
-                        <td style={{ padding: '12px 16px', fontSize: 11 }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: 4,
-                            background: candidate.source === 'pre-existing' ? '#F3F4F6' : '#DCFCE7',
-                            color: candidate.source === 'pre-existing' ? '#6B7280' : '#166534',
-                            fontWeight: 600,
-                            fontSize: 10,
-                          }}>
-                            {candidate.source === 'pre-existing' ? '📁 Existing' : '⬆️ New'}
-                          </span>
-                        </td>
-                        {selectedJob && (
-                          <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 600 }}>
-                            <span style={{
-                              padding: '4px 8px',
-                              borderRadius: 6,
-                              background: skillMatch > 75 ? '#DCFCE7' : skillMatch > 50 ? '#FEF3C7' : '#FEE2E2',
-                              color: skillMatch > 75 ? '#166534' : skillMatch > 50 ? '#92400E' : '#991B1B',
-                            }}>
-                              {skillMatch}%
-                            </span>
-                          </td>
-                        )}
-                        {jobs.map(job => {
-                          const score = candidate.jobScores[job.id]?.atsScore || 0;
-                          return (
-                            <td key={job.id} style={{ padding: '12px 16px', textAlign: 'center', fontSize: 13, fontWeight: 600 }}>
-                              <span style={{
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                background: score > 75 ? '#DCFCE7' : score > 50 ? '#FEF3C7' : '#FEE2E2',
-                                color: score > 75 ? '#166534' : score > 50 ? '#92400E' : '#991B1B',
-                              }}>
-                                {score.toFixed(0)}%
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>,
-                      
-                      isExpanded && selectedJob ? (
-                        <tr key={`expand-${candidate.id}`} style={{ background: '#FAFBFC', borderBottom: '2px solid #EAECF0' }}>
-                          <td colSpan={jobs.length + (selectedJob ? 6 : 5)} style={{ padding: 20 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
-                              {/* Candidate Skills */}
-                              <div>
-                                <p style={{ margin: '0 0 12px 0', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' }}>📋 Candidate Skills</p>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                  {parseSkills(candidateSkills).length > 0 ? (
-                                    parseSkills(candidateSkills).map((skill, idx) => (
-                                      <span key={idx} style={{ background: '#E0E7FF', color: '#4338CA', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-                                        {skill}
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <p style={{ margin: 0, fontSize: 11, color: 'var(--gray-400)' }}>No skills extracted</p>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Required Skills */}
-                              <div>
-                                <p style={{ margin: '0 0 12px 0', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' }}>🎯 Required Skills</p>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                  {parseSkills(selectedJob.required_skills).map((skill, idx) => (
-                                    <span key={idx} style={{ background: '#F3E8FF', color: '#7C3AED', padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
-                                      {skill}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* Match Analysis */}
-                              <div>
-                                <p style={{ margin: '0 0 12px 0', fontSize: 12, fontWeight: 700, color: 'var(--gray-700)' }}>✨ Analysis</p>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                  <div style={{ fontSize: 11 }}>
-                                    <span style={{ color: '#059669', fontWeight: 700 }}>✓ Matched ({skillDetails.matched.length})</span>: {skillDetails.matched.length > 0 ? skillDetails.matched.join(', ') : 'None'}
-                                  </div>
-                                  <div style={{ fontSize: 11 }}>
-                                    <span style={{ color: '#DC2626', fontWeight: 700 }}>✗ Missing ({skillDetails.missing.length})</span>: {skillDetails.missing.length > 0 ? skillDetails.missing.join(', ') : 'None'}
-                                  </div>
-                                  {skillDetails.extra.length > 0 && (
-                                    <div style={{ fontSize: 11 }}>
-                                      <span style={{ color: '#2563EB', fontWeight: 700 }}>+ Extra ({skillDetails.extra.length})</span>: {skillDetails.extra.join(', ')}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null,
-                    ].filter(Boolean);
-                  })}
-                </tbody>
-              </table>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {uploadedFiles.map((file, index) => (
+                <Badge key={index} color="accent" label={file.name} />
+              ))}
             </div>
           </div>
-        </>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {/* Rank Button */}
+          <Btn
+            onClick={handleRankCVs}
+            disabled={rankingLoading || !selectedJob}
+            style={{ minWidth: 160 }}
+          >
+            {rankingLoading ? (
+              <><Spinner size={16} />&nbsp;Analyzing CVs...</>
+            ) : (
+              <><svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>&nbsp;Rank CVs</>
+            )}
+          </Btn>
+
+          <button
+            type="button"
+            onClick={handleClearUploadedCVs}
+            disabled={uploadedFiles.length === 0 || rankingLoading}
+            style={{
+              minWidth: 160,
+              padding: '12px 16px',
+              borderRadius: 10,
+              border: '1px solid #D0D5DD',
+              background: uploadedFiles.length === 0 || rankingLoading ? '#F2F4F7' : '#fff',
+              color: uploadedFiles.length === 0 || rankingLoading ? '#98A2B3' : '#344054',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: uploadedFiles.length === 0 || rankingLoading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Clear Uploaded CVs
+          </button>
+        </div>
+      </div>
+
+      {rankings.length > 0 && (
+        <div style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', overflow: 'hidden' }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #EAECF0' }}>
+            <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: 'var(--gray-900)' }}>
+                  Ranked Candidates ({rankings.length})
+                </h3>
+                <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: '4px 0 0 0' }}>
+                  Candidates are sorted by best overall fit for this role.
+                </p>
+              </div>
+
+              <div style={{
+                background: 'linear-gradient(135deg, #F8FAFF 0%, #EEF4FF 100%)',
+                border: '1px solid #D9E4FF',
+                borderRadius: 14,
+                padding: '10px 12px'
+              }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>
+                  Top Candidate Snapshot
+                </div>
+                {topCandidate ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {topCandidate.candidate_name || topCandidate.file_name || 'Top Candidate'}
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#166534' }}>
+                        {topCandidate.final_score ?? 0}%
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--gray-600)', marginTop: 4 }}>
+                      {topCandidate.file_name || 'No file name'}
+                    </div>
+                    <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="green" label={`Matched ${(topCandidate.matched_skills || []).length}`} />
+                      <Badge color="red" label={`Missing ${(topCandidate.missing_skills || []).length}`} />
+                      <Badge color="yellow" label={`Coverage ${topCandidate.skill_match_pct ?? 0}%`} />
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: 12, color: 'var(--gray-600)' }}>
+                    Run ranking to see top candidate details.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+                gap: 10,
+                marginTop: 14,
+              }}
+            >
+              <div style={{ padding: '10px 12px', background: 'var(--gray-50)', border: '1px solid #EAECF0', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Top Score</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-900)' }}>{rankings[0]?.final_score ?? 0}%</div>
+              </div>
+              <div style={{ padding: '10px 12px', background: 'var(--gray-50)', border: '1px solid #EAECF0', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Avg Score</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-900)' }}>
+                  {Math.round(rankings.reduce((sum, item) => sum + (item.final_score || 0), 0) / rankings.length)}%
+                </div>
+              </div>
+              <div style={{ padding: '10px 12px', background: 'var(--gray-50)', border: '1px solid #EAECF0', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Strong Matches</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-900)' }}>
+                  {rankings.filter(item => (item.final_score || 0) >= 75).length}
+                </div>
+              </div>
+              <div style={{ padding: '10px 12px', background: 'var(--gray-50)', border: '1px solid #EAECF0', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Critical Gaps</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-900)' }}>
+                  {rankings.filter(item => (item.missing_skills || []).length >= 3).length}
+                </div>
+              </div>
+              <div style={{ padding: '10px 12px', background: 'var(--gray-50)', border: '1px solid #EAECF0', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Shortlisted</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--gray-900)' }}>
+                  {shortlistedCount}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => shortlistTopCandidates(3)}
+                style={{
+                  border: '1px solid #D0D5DD',
+                  background: '#fff',
+                  color: '#344054',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '7px 10px',
+                  cursor: 'pointer',
+                }}
+              >
+                Shortlist Top 3
+              </button>
+              <button
+                type="button"
+                onClick={() => setShortlistedKeys([])}
+                style={{
+                  border: '1px solid #D0D5DD',
+                  background: '#fff',
+                  color: '#344054',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '7px 10px',
+                  cursor: 'pointer',
+                }}
+              >
+                Clear Shortlist
+              </button>
+            </div>
+
+            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1.4fr repeat(3, minmax(130px, 1fr)) auto auto', gap: 10 }}>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search candidate or file"
+                style={{
+                  width: '100%', padding: '10px 12px', background: '#fff', border: '1px solid #D0D5DD',
+                  borderRadius: 10, fontSize: 13, outline: 'none', color: 'var(--gray-900)'
+                }}
+              />
+
+              <select
+                value={fitFilter}
+                onChange={(e) => setFitFilter(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', background: '#fff', border: '1px solid #D0D5DD',
+                  borderRadius: 10, fontSize: 13, outline: 'none', color: 'var(--gray-900)'
+                }}
+              >
+                <option value="all">All Fit Levels</option>
+                <option value="strong">Strong Fit</option>
+                <option value="good">Good Fit</option>
+                <option value="moderate">Moderate Fit</option>
+                <option value="low">Low Fit</option>
+              </select>
+
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', background: '#fff', border: '1px solid #D0D5DD',
+                  borderRadius: 10, fontSize: 13, outline: 'none', color: 'var(--gray-900)'
+                }}
+              >
+                <option value="all">All Sources</option>
+                <option value="submission">Applications</option>
+                <option value="media">Media Library</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  width: '100%', padding: '10px 12px', background: '#fff', border: '1px solid #D0D5DD',
+                  borderRadius: 10, fontSize: 13, outline: 'none', color: 'var(--gray-900)'
+                }}
+              >
+                <option value="overall">Sort: Best Fit</option>
+                <option value="skills">Sort: Skill Coverage</option>
+                <option value="missing">Sort: Least Missing Skills</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={clearRankingFilters}
+                style={{
+                  minWidth: 130,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  border: '1px solid #D0D5DD',
+                  background: '#fff',
+                  color: '#344054',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Filters
+              </button>
+
+              <Btn onClick={exportShortlist} style={{ minWidth: 170 }}>
+                Export Shortlist
+              </Btn>
+            </div>
+
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--gray-600)' }}>
+              Showing {sortedFilteredRankings.length} of {rankings.length} candidates.
+              {sortedFilteredRankings.length === 0 ? ' Adjust filters to reveal candidates.' : ''}
+              {compareKeys.length > 0 ? ` Compare selected: ${compareKeys.length}/2.` : ''}
+            </div>
+
+            {compareCandidates.length > 0 && (
+              <div style={{
+                marginTop: 14,
+                border: '1px solid #E4E7EC',
+                borderRadius: 12,
+                background: '#FCFCFD',
+                padding: 12
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#475467', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
+                  Compare Candidates ({compareCandidates.length}/2)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: compareCandidates.length === 1 ? '1fr' : '1fr 1fr', gap: 10 }}>
+                  {compareCandidates.map((candidate, idx) => (
+                    <div key={`${candidate.file_name || candidate.candidate_name}-${idx}`} style={{ border: '1px solid #EAECF0', borderRadius: 10, background: '#fff', padding: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{candidate.candidate_name || candidate.file_name}</div>
+                      <div style={{ fontSize: 11, color: '#667085', marginTop: 2 }}>{candidate.file_name || '-'}</div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+                        <div style={{ fontSize: 12, color: '#344054' }}>
+                          <span style={{ fontWeight: 700 }}>{candidate.final_score || 0}%</span> Overall Fit
+                        </div>
+                        <div style={{ fontSize: 12, color: '#344054' }}>
+                          <span style={{ fontWeight: 700 }}>{candidate.skill_match_pct || 0}%</span> Skill Coverage
+                        </div>
+                        <div style={{ fontSize: 12, color: '#027A48' }}>
+                          <span style={{ fontWeight: 700 }}>{(candidate.matched_skills || []).length}</span> Matched
+                        </div>
+                        <div style={{ fontSize: 12, color: '#B42318' }}>
+                          <span style={{ fontWeight: 700 }}>{(candidate.missing_skills || []).length}</span> Missing
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {!isMobile ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--gray-50)' }}>
+                  {['Rank', 'Candidate', 'Overall Fit', 'Skill Coverage', 'Hiring Insight', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '14px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', borderBottom: '1px solid #EAECF0' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedFilteredRankings.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '24px 20px', textAlign: 'center', fontSize: 13, color: 'var(--gray-500)' }}>
+                      <div>No candidates match the selected filters.</div>
+                      <button
+                        type="button"
+                        onClick={clearRankingFilters}
+                        style={{
+                          marginTop: 8,
+                          border: '1px solid #D0D5DD',
+                          background: '#fff',
+                          color: '#344054',
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          padding: '6px 10px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    </td>
+                  </tr>
+                )}
+                {sortedFilteredRankings.map((rank, index) => {
+                  const key = getRankKey(rank, index);
+                  const isShortlisted = shortlistedKeys.includes(key);
+                  const inCompare = compareKeys.includes(key);
+                  return (
+                  <Fragment key={key}>
+                    <tr style={{ borderBottom: '1px solid #EAECF0' }}>
+                      <td style={{ padding: '16px 20px', fontSize: 13, fontWeight: 600, color: 'var(--gray-900)' }}>
+                        #{index + 1}
+                      </td>
+                      <td style={{ padding: '16px 20px', fontSize: 13, color: 'var(--gray-900)' }}>
+                        <div style={{ fontWeight: 600 }}>{rank.candidate_name || rank.file_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 2 }}>{rank.file_name || '-'}</div>
+                        <div style={{ marginTop: 6 }}>
+                          <Badge color={rank.source === 'media' ? 'accent' : 'gray'} label={rank.source === 'media' ? 'From Media' : 'From Application'} />
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 20px', fontSize: 13, fontWeight: 700 }}>
+                        <span style={{
+                          color: rank.final_score >= 80 ? '#22C55E' : rank.final_score >= 60 ? '#F59E0B' : '#E8321A',
+                          fontWeight: 700
+                        }}>
+                          {rank.final_score}%
+                        </span>
+                        <div style={{ fontSize: 11, color: 'var(--gray-600)', marginTop: 4 }}>
+                          {getFitLabel(rank.final_score || 0)}
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 20px', fontSize: 13, color: 'var(--gray-700)' }}>
+                        <div>{rank.skill_match_pct ?? 0}% matched</div>
+                        <div style={{ fontSize: 11, color: 'var(--gray-500)', marginTop: 3 }}>
+                          {(rank.matched_skills || []).length} matched, {(rank.missing_skills || []).length} missing
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 20px', maxWidth: 320 }}>
+                        <div style={{ fontSize: 12, color: 'var(--gray-700)', lineHeight: 1.4, marginBottom: 8 }}>
+                          {rank.semantic_analysis || 'No semantic summary available'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 20px' }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedRank(expandedRank === key ? null : key)}
+                            style={{
+                              border: '1px solid #D0D5DD',
+                              background: '#fff',
+                              color: 'var(--gray-700)',
+                              borderRadius: 8,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {expandedRank === key ? 'Hide Brief' : 'Open Brief'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleShortlist(key)}
+                            style={{
+                              border: '1px solid #D0D5DD',
+                              background: isShortlisted ? '#ECFDF3' : '#fff',
+                              color: isShortlisted ? '#027A48' : 'var(--gray-700)',
+                              borderRadius: 8,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {isShortlisted ? 'Shortlisted' : 'Shortlist'}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => toggleCompare(key)}
+                            style={{
+                              border: '1px solid #D0D5DD',
+                              background: inCompare ? '#EFF8FF' : '#fff',
+                              color: inCompare ? '#175CD3' : 'var(--gray-700)',
+                              borderRadius: 8,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '6px 10px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {inCompare ? 'Selected' : 'Compare'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {expandedRank === key && (
+                      <tr style={{ background: 'var(--gray-50)', borderBottom: '1px solid #EAECF0' }}>
+                        <td colSpan={6} style={{ padding: '16px 20px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                Required Skills
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(rank.required_skills || []).map(skill => (
+                                  <Badge key={`req-${skill}`} color="gray" label={skill} />
+                                ))}
+                                {(rank.required_skills || []).length === 0 && <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>No required skills defined</span>}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                Candidate Skills
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(rank.candidate_skills || []).map(skill => (
+                                  <Badge key={`cand-${skill}`} color="accent" label={skill} />
+                                ))}
+                                {(rank.candidate_skills || []).length === 0 && <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>No skills extracted</span>}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                Matched Skills
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(rank.matched_skills || []).map(skill => (
+                                  <Badge key={`mat-${skill}`} color="green" label={skill} />
+                                ))}
+                                {(rank.matched_skills || []).length === 0 && <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>None</span>}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                Missing Skills
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(rank.missing_skills || []).map(skill => (
+                                  <Badge key={`mis-${skill}`} color="red" label={skill} />
+                                ))}
+                                {(rank.missing_skills || []).length === 0 && <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>None</span>}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                Extra Strengths
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {(rank.extra_skills || []).map(skill => (
+                                  <Badge key={`ext-${skill}`} color="yellow" label={skill} />
+                                ))}
+                                {(rank.extra_skills || []).length === 0 && <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>None</span>}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          ) : null}
+        </div>
       )}
+
+      {/* Existing CVs Display */}
+      {selectedJob && !rankingLoading && (
+        <div style={{ background: 'var(--white)', borderRadius: 20, padding: '24px', border: '1px solid #EAECF0', marginTop: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--gray-900)', margin: 0 }}>
+              Candidate CV Library ({submissions.length})
+            </h3>
+            <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: 0 }}>
+              Supporting list of submitted and media CVs used in ranking.
+            </p>
+          </div>
+
+          {submissions.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '36px 20px', background: 'var(--gray-50)', borderRadius: 12 }}>
+              <svg width="48" height="48" fill="none" stroke="var(--gray-300)" strokeWidth="1.5" viewBox="0 0 24 24" style={{ margin: '0 auto 16px', display: 'block' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+              </svg>
+              <p style={{ fontSize: 14, color: 'var(--gray-500)', fontWeight: 600, marginBottom: 4 }}>No CV records available</p>
+              <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>Once CVs are submitted or detected in media, they will appear here.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              {submissions.map((submission) => (
+                <div key={submission.id || submission.resume_filename || submission.resume_file} style={{
+                  padding: 16,
+                  border: '1px solid #EAECF0',
+                  borderRadius: 12,
+                  background: 'var(--gray-50)',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--gray-900)' }}>
+                      {submission.candidate_name || 'Anonymous Candidate'}
+                    </div>
+                    <Badge
+                      color={submission.status === 'MEDIA' ? 'accent' : 'green'}
+                      label={submission.status === 'MEDIA' ? 'From Media' : 'From Application'}
+                    />
+                  </div>
+
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 8 }}>
+                    {submission.candidate_email || 'No email provided'}
+                  </div>
+
+                  <div style={{ fontSize: 12, color: 'var(--gray-700)', marginBottom: 8 }}>
+                    CV File: {submission.resume_filename || 'Not available'}
+                  </div>
+
+                  <div style={{ fontSize: 12, color: 'var(--gray-600)', marginBottom: 8 }}>
+                    Added: {submission.submitted_at ? new Date(submission.submitted_at).toLocaleDateString() : 'N/A'}
+                  </div>
+
+                  {submission.candidate_skills && submission.candidate_skills.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-700)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                        Top Skills
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {submission.candidate_skills.slice(0, 4).map(skill => (
+                          <Badge key={skill} color="accent" label={skill} />
+                        ))}
+                        {submission.candidate_skills.length > 4 && (
+                          <Badge color="gray" label={`+${submission.candidate_skills.length - 4}`} />
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading && <Spinner />}
     </div>
   );
 }

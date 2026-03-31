@@ -158,15 +158,12 @@ export function Badge({ label, color }) {
 
 // ── BUTTON ───────────────────────────────────────────────────────────────────
 export function Btn({ children, variant = 'primary', size = 'md', ...props }) {
-  const isDisabled = !!props.disabled;
   const base = {
     border: 'none', borderRadius: 14, fontWeight: 700,
     cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
     justifyContent: 'center', gap: 7, transition: 'all .15s',
     fontSize: size === 'sm' ? 12 : 14,
     padding: size === 'sm' ? '7px 14px' : '11px 22px',
-    opacity: isDisabled ? 0.55 : 1,
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
   };
   const variants = {
     primary: { background: 'var(--red)', color: '#fff', boxShadow: 'var(--shadow-red)' },
@@ -177,8 +174,8 @@ export function Btn({ children, variant = 'primary', size = 'md', ...props }) {
   };
   return (
     <button {...props} style={{ ...base, ...variants[variant], ...props.style }}
-      onMouseEnter={e => { if (!isDisabled && variant === 'primary') e.currentTarget.style.background = '#d02a14'; }}
-      onMouseLeave={e => { if (!isDisabled && variant === 'primary') e.currentTarget.style.background = 'var(--red)'; }}
+      onMouseEnter={e => { if (variant === 'primary') e.currentTarget.style.background = '#d02a14'; }}
+      onMouseLeave={e => { if (variant === 'primary') e.currentTarget.style.background = 'var(--red)'; }}
     >
       {children}
     </button>

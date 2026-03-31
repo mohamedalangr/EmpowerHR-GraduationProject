@@ -28,12 +28,20 @@ class JobSerializer(serializers.ModelSerializer):
 
 class SubmissionSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source="job.title", read_only=True)
+    resume_file = serializers.FileField(read_only=True)
+    resume_filename = serializers.SerializerMethodField()
+
+    def get_resume_filename(self, obj):
+        if not obj.resume_file:
+            return ""
+        return obj.resume_file.name.split("/")[-1]
 
     class Meta:
         model  = Submission
         fields = [
             "id", "job", "job_title",
             "candidate_name", "candidate_email",
+            "resume_file", "resume_filename",
             "status", "error_message",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
@@ -56,8 +64,9 @@ class SubmissionUploadSerializer(serializers.ModelSerializer):
         fields = ["job", "candidate_name", "candidate_email", "resume_file"]
 
     def validate_resume_file(self, value):
-        if not (value.name.lower().endswith(".pdf") or value.name.lower().endswith(".txt")):
-            raise serializers.ValidationError("Only PDF and TXT files are accepted.")
+        allowed_extensions = (".pdf", ".txt")
+        if not value.name.lower().endswith(allowed_extensions):
+            raise serializers.ValidationError("Only PDF or TXT files are accepted.")
         if value.size > 10 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 10 MB).")
         return value

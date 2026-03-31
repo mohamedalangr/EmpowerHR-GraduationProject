@@ -1,0 +1,33 @@
+Ahmed Hassan
+Data Analyst | Cairo, Egypt
+Email: ahmed@example.com
+
+Professional Summary:
+Data Analyst with 3 years of experience in reporting, dashboard creation, and business performance analysis.
+Skilled in working with large datasets and automating reporting tasks for stakeholders.
+
+Skills:
+SQL
+Python
+Power BI
+Excel
+ETL
+Pandas
+NumPy
+Automation
+Azure
+Git
+
+Experience:
+Data Analyst – ABC Company (2021–2024)
+
+- Designed Power BI dashboards for monthly KPI reporting
+- Wrote SQL queries to extract data from company databases
+- Automated weekly reports using Python scripts
+- Performed trend analysis for business teams
+- Reduced reporting turnaround time by 40%
+- Built ETL workflows for structured reporting pipelines
+
+Education:
+B.Sc. in Computer Science
+Cairo University

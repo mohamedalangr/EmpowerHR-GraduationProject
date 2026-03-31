@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getForms, submitFeedback } from '../../api/index.js';
 import { Spinner, Modal, Btn, Badge, useToast } from '../../components/shared/index.jsx';
+import { useAuth } from "../../context/AuthContext";
 
-const EMPLOYEE_ID = 'emp_001'; // replace with real auth later
 
 function RatingButtons({ question, value, onChange, disabled }) {
   if (question.fieldType === 'score_1_4') {
@@ -66,6 +66,8 @@ function RatingButtons({ question, value, onChange, disabled }) {
 }
 
 export function EmployeeFeedbackPage() {
+  const { user } = useAuth();
+  const EMPLOYEE_ID = user?.employee_id;
   const toast = useToast();
   const [forms, setForms]         = useState([]);
   const [loading, setLoading]     = useState(true);

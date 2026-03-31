@@ -1,18 +1,55 @@
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import { Btn } from './index.jsx';
 
-export function Navbar({ role, activePage, onNavigate, onSwitchRole }) {
-  const hrPages = [
-    { id: 'jobs',        label: 'Jobs' },
-    { id: 'forms',       label: 'Forms' },
-    { id: 'submissions', label: 'Submissions' },
-    { id: 'dashboard',   label: 'Dashboard' },
-    { id: 'cv-ranking',  label: 'CV Ranking' },
-  ];
-  const employeePages = [
-    { id: 'careers',  label: 'Careers' },
-    { id: 'feedback', label: 'Feedback' },
-  ];
-  const pages = role === 'hr' ? hrPages : employeePages;
+const NAV_LINKS = {
+  TeamMember: [
+    { path: '/employee/feedback', label: 'Feedback' },
+    { path: '/employee/profile',  label: 'Profile'  },
+  ],
+  TeamLeader: [
+    { path: '/employee/feedback', label: 'Feedback' },
+    { path: '/leader/team',       label: 'My Team'  },
+    { path: '/employee/profile',  label: 'Profile'  },
+  ],
+  HRManager: [
+    { path: '/hr/dashboard',   label: 'Dashboard'   },
+    { path: '/hr/forms',       label: 'Forms'       },
+    { path: '/hr/submissions', label: 'Submissions' },
+    { path: '/hr/jobs',        label: 'Job Postings' },
+    { path: '/hr/cv-ranking',  label: 'CV Ranking'  },
+    { path: '/employee/profile', label: 'Profile'   },
+  ],
+  Admin: [
+    { path: '/admin/dashboard', label: 'Dashboard' },
+    { path: '/admin/users',     label: 'Users'     },
+    { path: '/employee/profile', label: 'Profile'  },
+  ],
+  Candidate: [
+    { path: '/candidate/dashboard',    label: 'Jobs'         },
+    { path: '/candidate/applications', label: 'Applications' },
+  ],
+};
+
+export function Navbar() {
+  const { user, logout } = useAuth();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  if (!user) return null;
+
+  const links = NAV_LINKS[user.role] ?? [];
+  const activePath = location.pathname;
+
+  const roleLabel = {
+    TeamMember:  'Employee',
+    TeamLeader:  'Team Leader',
+    HRManager:   'HR Manager',
+    Admin:       'Admin',
+    Candidate:   'Candidate',
+  }[user.role] ?? user.role;
+
+  const isHR = ['HRManager', 'Admin'].includes(user.role);
 
   return (
     <nav style={{
@@ -25,6 +62,7 @@ export function Navbar({ role, activePage, onNavigate, onSwitchRole }) {
         maxWidth: 1280, margin: '0 auto', height: 68,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
+
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{
@@ -38,37 +76,47 @@ export function Navbar({ role, activePage, onNavigate, onSwitchRole }) {
             </svg>
           </div>
           <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-.3px' }}>
-            HR Manager
+            {isHR ? 'HR Manager' : 'HR Portal'}
           </span>
           <span style={{
             fontSize: 11, fontWeight: 700, padding: '3px 10px',
-            background: role === 'hr' ? 'var(--accent-light)' : 'var(--red-light)',
-            color: role === 'hr' ? '#8B4A42' : 'var(--red)',
+            background: isHR ? 'var(--accent-light)' : 'var(--red-light)',
+            color: isHR ? '#8B4A42' : 'var(--red)',
             borderRadius: 20, marginLeft: 4,
           }}>
-            {role === 'hr' ? 'HR Manager' : 'Employee'}
+            {roleLabel}
           </span>
         </div>
 
         {/* Nav tabs */}
         <div style={{ display: 'flex', gap: 4 }}>
-          {pages.map(p => (
-            <button key={p.id} onClick={() => onNavigate(p.id)} style={{
-              padding: '8px 16px', fontSize: 13, fontWeight: 600,
-              border: 'none', borderRadius: 20, cursor: 'pointer',
-              background: activePage === p.id ? 'var(--red-light)' : 'none',
-              color: activePage === p.id ? 'var(--red)' : 'var(--gray-500)',
-              transition: 'all .15s',
-            }}>
-              {p.label}
+          {links.map(link => (
+            <button
+              key={link.path}
+              onClick={() => navigate(link.path)}
+              style={{
+                padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                border: 'none', borderRadius: 20, cursor: 'pointer',
+                background: activePath === link.path ? 'var(--red-light)' : 'none',
+                color: activePath === link.path ? 'var(--red)' : 'var(--gray-500)',
+                transition: 'all .15s',
+              }}
+            >
+              {link.label}
             </button>
           ))}
         </div>
 
-        {/* Role switcher (dev only) */}
-        <Btn variant="ghost" size="sm" onClick={onSwitchRole}>
-          Switch to {role === 'hr' ? 'Employee' : 'HR Manager'}
-        </Btn>
+        {/* User info + logout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, color: 'var(--gray-500)', fontWeight: 500 }}>
+            {user.full_name}
+          </span>
+          <Btn variant="ghost" size="sm" onClick={logout}>
+            Sign Out
+          </Btn>
+        </div>
+
       </div>
     </nav>
   );

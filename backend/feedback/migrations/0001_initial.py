@@ -39,8 +39,6 @@ class Migration(migrations.Migration):
                 ('educationLevel', models.IntegerField(blank=True, choices=[(1, 'High School'), (2, 'Associate Degree'), (3, "Bachelor's Degree"), (4, "Master's Degree"), (5, 'PhD')], null=True)),
                 ('numberOfDependents', models.IntegerField(blank=True, null=True)),
                 ('jobLevel', models.IntegerField(blank=True, choices=[(1, 'Entry'), (2, 'Mid'), (3, 'Senior')], null=True)),
-                ('companySize', models.IntegerField(blank=True, choices=[(1, 'Small'), (2, 'Medium'), (3, 'Large')], null=True)),
-                ('companyTenure', models.IntegerField(blank=True, null=True)),
                 ('remoteWork', models.BooleanField(blank=True, null=True)),
                 ('maritalStatus', models.CharField(blank=True, choices=[('Single', 'Single'), ('Married', 'Married'), ('Divorced', 'Divorced')], max_length=20, null=True)),
             ],
