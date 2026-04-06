@@ -1,0 +1,15 @@
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.11"
+PIP_NO_CACHE_DIR = "1"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+PIP_EXTRA_INDEX_URL = "https://download.pytorch.org/whl/cpu"
+
+[phases.install]
+cmds = [
+  "python -m pip install --upgrade pip setuptools wheel",
+  "python -m pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu",
+  "python -m pip install --no-cache-dir -r requirements.txt"
+]
+
+[start]
+cmd = "gunicorn core.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-file -"

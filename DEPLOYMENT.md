@@ -12,6 +12,7 @@
 - Python version: `3.11.9`
 - Run after deploy: `python manage.py migrate`
 - Optional: `python manage.py createsuperuser`
+- Build optimization: `backend/nixpacks.toml` forces a no-cache pip install and uses the CPU-only PyTorch wheel so Railway stays smaller without changing app logic
 
 ## Required backend environment variables
 ```env
