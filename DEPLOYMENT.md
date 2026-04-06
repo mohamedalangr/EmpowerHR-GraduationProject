@@ -8,11 +8,12 @@
 
 ## Backend (Railway)
 - Root directory: `backend`
+- Builder: use the repo `Dockerfile` / `backend/Dockerfile` (smaller than the default image builder for this project)
 - Start command: `gunicorn core.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-file -`
 - Python version: `3.11.9`
 - Run after deploy: `python manage.py migrate`
 - Optional: `python manage.py createsuperuser`
-- Build optimization: `backend/nixpacks.toml` forces a no-cache pip install and uses the CPU-only PyTorch wheel so Railway stays smaller without changing app logic
+- Build optimization: the Docker setup installs only the backend dependencies, uses no pip cache, and keeps the Railway image smaller without changing app logic
 
 ## Required backend environment variables
 ```env
