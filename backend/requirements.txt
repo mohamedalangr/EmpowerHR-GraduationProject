@@ -1,6 +1,11 @@
 django>=4.2
 djangorestframework>=3.14
+djangorestframework-simplejwt>=5.3
 django-cors-headers>=4.0
+dj-database-url>=2.2
+gunicorn>=23.0
+psycopg[binary]>=3.2
+whitenoise>=6.9
 PyMuPDF>=1.23
 sentence-transformers>=2.7
 scikit-learn>=1.4

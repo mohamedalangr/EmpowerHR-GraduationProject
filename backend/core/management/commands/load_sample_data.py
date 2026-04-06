@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from accounts.models import User
+from accounts.demo_access import ensure_demo_users
 from feedback.models import FeedbackForm, FeedbackQuestion, FeedbackSubmission, FeedbackAnswer
 from resume_pipeline.models import Job, Submission
 from attrition.models import AttritionPrediction
@@ -11,6 +12,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write('Loading sample data...')
+
+        demo_users = ensure_demo_users()
+        self.stdout.write(self.style.SUCCESS(f'Demo users ready: {", ".join(user.email for user in demo_users)}'))
 
         # Create sample jobs
         jobs_data = [

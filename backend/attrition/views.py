@@ -1,7 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 
+from accounts.permissions import IsHRManager
 from feedback.models import FeedbackForm, FeedbackSubmission
 from .models import AttritionPrediction
 from .predictor import predict_risk
@@ -9,6 +11,8 @@ from .serializers import AttritionPredictionSerializer
 
 
 class RunAttritionPredictionView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManager]
+
     """
     POST /api/attrition/run/
 
@@ -94,6 +98,8 @@ class RunAttritionPredictionView(APIView):
 
 
 class AttritionPredictionListView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManager]
+
     """
     GET /api/attrition/predictions/
     Returns all predictions, optionally filtered by employee.
@@ -118,6 +124,8 @@ class AttritionPredictionListView(APIView):
 
 
 class AttritionPredictionLatestView(APIView):
+    permission_classes = [IsAuthenticated, IsHRManager]
+
     """
     GET /api/attrition/predictions/latest/
     Returns the most recent prediction for every employee.

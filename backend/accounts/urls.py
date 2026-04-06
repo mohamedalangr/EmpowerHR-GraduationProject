@@ -6,6 +6,9 @@ from .views import (
     MeView,
     ChangePasswordView,
     CandidateRegisterView,
+    RequestPasswordResetOTPView,
+    ConfirmPasswordResetOTPView,
+    DemoAccessView,
     CreateEmployeeView,
 )
 
@@ -22,6 +25,9 @@ urlpatterns = [
     # --- Registration ---
     # Candidates self-register via public portal
     path("candidate/register/",  CandidateRegisterView.as_view(), name="candidate-register"),
+    path("password-reset/request/", RequestPasswordResetOTPView.as_view(), name="auth-password-reset-request"),
+    path("password-reset/confirm/", ConfirmPasswordResetOTPView.as_view(), name="auth-password-reset-confirm"),
+    path("demo-access/", DemoAccessView.as_view(), name="auth-demo-access"),
     # Internal employees are created by Admin only
     path("employees/create/",    CreateEmployeeView.as_view(),    name="employee-create"),
 ]

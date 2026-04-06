@@ -1,4 +1,10 @@
+import secrets
+
 from django.db import models
+
+
+def generate_tracking_code():
+    return secrets.token_hex(4).upper()
 
 
 class Job(models.Model):
@@ -31,11 +37,24 @@ class Submission(models.Model):
         DONE       = "done",       "Done"
         FAILED     = "failed",     "Failed"
 
+    class ReviewStage(models.TextChoices):
+        APPLIED = "Applied", "Applied"
+        SHORTLISTED = "Shortlisted", "Shortlisted"
+        INTERVIEW = "Interview", "Interview"
+        HIRED = "Hired", "Hired"
+        REJECTED = "Rejected", "Rejected"
+
     job             = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="submissions")
     candidate_name  = models.CharField(max_length=255, blank=True)
     candidate_email = models.EmailField(blank=True)
+    tracking_code   = models.CharField(max_length=16, unique=True, default=generate_tracking_code, editable=False)
     resume_file     = models.FileField(upload_to="resumes/")
     status          = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    review_stage    = models.CharField(max_length=20, choices=ReviewStage.choices, default=ReviewStage.APPLIED)
+    stage_notes     = models.TextField(blank=True)
+    stage_updated_at = models.DateTimeField(null=True, blank=True)
+    talent_pool     = models.BooleanField(default=True)
+    stage_history   = models.JSONField(default=list, blank=True)
     error_message   = models.TextField(blank=True)
 
     # ── Extracted fields ──────────────────────────────────────────────────────

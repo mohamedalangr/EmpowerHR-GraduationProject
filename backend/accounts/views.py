@@ -10,9 +10,12 @@ from .serializers import (
     UserMeSerializer,
     ChangePasswordSerializer,
     CandidateRegisterSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
 )
 from .permissions import IsAdmin
 from .models import generate_employee_id
+from .demo_access import build_demo_access_payload, ensure_demo_users
 
 
 class LoginView(TokenObtainPairView):
@@ -73,6 +76,50 @@ class CandidateRegisterView(generics.CreateAPIView):
     serializer_class   = CandidateRegisterSerializer
 
 
+class RequestPasswordResetOTPView(APIView):
+    """
+    POST /api/auth/password-reset/request/
+    Public endpoint. Sends a one-time password reset code by email if the account exists.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {'detail': 'If an account exists for that email, a reset code has been sent.'},
+            status=status.HTTP_200_OK,
+        )
+
+
+class ConfirmPasswordResetOTPView(APIView):
+    """
+    POST /api/auth/password-reset/confirm/
+    Public endpoint. Verifies the OTP and sets a new password.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'detail': 'Password reset successful. You can now sign in.'})
+
+
+class DemoAccessView(APIView):
+    """
+    GET /api/auth/demo-access/
+    Public demo endpoint. Ensures standard role-based demo accounts exist and
+    returns the credentials plus a simple access summary for each role.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        ensure_demo_users()
+        return Response({'accounts': build_demo_access_payload()})
+
+
 class CreateEmployeeView(APIView):
     """
     POST /api/auth/employees/create/
@@ -117,6 +164,20 @@ class CreateEmployeeView(APIView):
             role        = role,
             employee_id = employee_id,
         )
+
+        try:
+            from feedback.models import Employee
+            Employee.objects.get_or_create(
+                employeeID=employee_id,
+                defaults={
+                    'fullName': request.data['full_name'],
+                    'email': request.data['email'],
+                    'role': role,
+                    'employmentStatus': 'Active',
+                }
+            )
+        except Exception:
+            pass
 
         return Response(
             {

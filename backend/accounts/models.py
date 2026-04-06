@@ -1,5 +1,9 @@
+from datetime import timedelta
+import random
+
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 
 def generate_employee_id():
@@ -81,3 +85,32 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_employee(self):
         return self.role != self.Role.CANDIDATE
+
+
+class PasswordResetOTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_otps')
+    code = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'auth_password_reset_otp'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} — {self.code}"
+
+    @classmethod
+    def issue_for_user(cls, user):
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        code = f"{random.randint(0, 999999):06d}"
+        return cls.objects.create(
+            user=user,
+            code=code,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at

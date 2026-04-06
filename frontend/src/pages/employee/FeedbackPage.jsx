@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getForms, submitFeedback } from '../../api/index.js';
 import { Spinner, Modal, Btn, Badge, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from "../../context/AuthContext";
+import { useLanguage } from '../../context/LanguageContext';
 
 
 function RatingButtons({ question, value, onChange, disabled }) {
+  const { t } = useLanguage();
+
   if (question.fieldType === 'score_1_4') {
     return (
       <div>
@@ -29,7 +33,7 @@ function RatingButtons({ question, value, onChange, disabled }) {
           ))}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--gray-300)', fontWeight: 500, marginTop: 8, padding: '0 2px' }}>
-          <span>Poor</span><span>Excellent</span>
+          <span>{t('Poor')}</span><span>{t('Excellent')}</span>
         </div>
       </div>
     );
@@ -44,7 +48,7 @@ function RatingButtons({ question, value, onChange, disabled }) {
             background: value === v ? 'var(--red)' : 'var(--white)',
             color: value === v ? '#fff' : 'var(--gray-600)',
             cursor: disabled ? 'default' : 'pointer', transition: 'all .15s',
-          }}>{v ? 'Yes' : 'No'}</button>
+          }}>{v ? t('Yes') : t('No')}</button>
         ))}
       </div>
     );
@@ -53,7 +57,7 @@ function RatingButtons({ question, value, onChange, disabled }) {
     return (
       <input type="number" step="0.1" min="0" disabled={disabled}
         value={value ?? ''} onChange={e => onChange(parseFloat(e.target.value) || null)}
-        placeholder="Enter a number"
+        placeholder={t('Enter a number')}
         style={{
           width: '100%', maxWidth: 200, padding: '12px 16px',
           background: 'var(--gray-100)', border: '2px solid transparent',
@@ -66,7 +70,9 @@ function RatingButtons({ question, value, onChange, disabled }) {
 }
 
 export function EmployeeFeedbackPage() {
-  const { user } = useAuth();
+  const { user, resolvePath } = useAuth();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
   const EMPLOYEE_ID = user?.employee_id;
   const toast = useToast();
   const [forms, setForms]         = useState([]);
@@ -131,21 +137,35 @@ export function EmployeeFeedbackPage() {
 
   const pending   = forms.filter(f => getStatus(f) === 'pending').length;
   const completed = forms.filter(f => getStatus(f) === 'completed').length;
+  const completionRate = forms.length ? Math.round((completed / forms.length) * 100) : 0;
+  const averageQuestions = forms.length
+    ? Math.round(forms.reduce((sum, form) => sum + (form.questions?.length || 0), 0) / forms.length)
+    : 0;
+  const sortedForms = useMemo(
+    () => [...forms].sort((a, b) => {
+      const aPending = getStatus(a) === 'pending' ? 0 : 1;
+      const bPending = getStatus(b) === 'pending' ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return (a.title || '').localeCompare(b.title || '');
+    }),
+    [forms],
+  );
+  const nextPendingForm = sortedForms.find((form) => getStatus(form) === 'pending') || null;
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '40px 32px 80px' }}>
+    <div className="hr-page-shell">
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Feedback Forms</h2>
-        <p style={{ fontSize: 13.5, color: 'var(--gray-500)' }}>Complete satisfaction surveys and view past submissions</p>
+      <div className="hr-page-header">
+        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{t('Feedback Forms')}</h2>
+        <p style={{ fontSize: 13.5, color: 'var(--gray-500)' }}>{t('Complete satisfaction surveys and view past submissions')}</p>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div className="hr-stats-grid" style={{ marginBottom: 28 }}>
         {[
-          { label: 'Pending', value: pending, grad: 'linear-gradient(135deg,#E8321A,#c4240f)' },
-          { label: 'Completed', value: completed, grad: 'linear-gradient(135deg,#22C55E,#16a34a)' },
-          { label: 'Total', value: forms.length, grad: 'linear-gradient(135deg,#D5A499,#b8837a)' },
+          { label: t('Pending'), value: pending, grad: 'linear-gradient(135deg,#E8321A,#c4240f)' },
+          { label: t('Completed'), value: completed, grad: 'linear-gradient(135deg,#22C55E,#16a34a)' },
+          { label: t('Total'), value: forms.length, grad: 'linear-gradient(135deg,#D5A499,#b8837a)' },
         ].map(s => (
           <div key={s.label} style={{ background: s.grad, borderRadius: 24, padding: '24px 28px', color: '#fff', boxShadow: 'var(--shadow-md)' }}>
             <div style={{ fontSize: 12, fontWeight: 600, opacity: .85, marginBottom: 6 }}>{s.label}</div>
@@ -154,27 +174,68 @@ export function EmployeeFeedbackPage() {
         ))}
       </div>
 
+      <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24 }}>
+        <div className="hr-surface-card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Feedback Progress')}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--gray-900)' }}>{loading ? '—' : `${completionRate}%`}</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t('Completion Rate')}</div>
+          </div>
+          <div style={{ height: 8, borderRadius: 999, background: '#F3F4F6', overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ width: `${completionRate}%`, height: '100%', background: completionRate === 100 ? '#16A34A' : 'var(--red)', borderRadius: 999 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color="red" label={`${t('Pending')} ${pending}`} />
+            <Badge color="green" label={`${t('Completed')} ${completed}`} />
+            <Badge color="accent" label={`${t('Avg Questions')} ${averageQuestions}`} />
+          </div>
+        </div>
+
+        <div className="hr-surface-card" style={{ padding: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Next Best Action')}</div>
+          {nextPendingForm ? (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 4 }}>{nextPendingForm.title}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginBottom: 14 }}>
+                {(nextPendingForm.questions?.length || 0)} {t('questions')} • {t('Ready to complete now')}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <Btn onClick={() => handleOpen(nextPendingForm)}>{t('Continue Next Form')}</Btn>
+                <Btn variant="ghost" onClick={load}>{t('Refresh')}</Btn>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#027A48', marginBottom: 6 }}>{t('You are all caught up')}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginBottom: 14 }}>{t('Review your account or come back when a new survey is published.')}</div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <Btn variant="outline" onClick={() => navigate(resolvePath('/employee/profile'))}>{t('Open Profile')}</Btn>
+                <Btn variant="ghost" onClick={load}>{t('Refresh')}</Btn>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {/* Forms grid */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 80 }}><Spinner /></div>
       ) : forms.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '64px 32px', background: 'var(--white)', borderRadius: 24, border: '2px dashed var(--gray-300)' }}>
-          <p style={{ fontSize: 13, color: 'var(--gray-300)', fontWeight: 500 }}>No active feedback forms at the moment.</p>
+        <div className="hr-soft-empty" style={{ textAlign: 'center', padding: '64px 32px' }}>
+          <p style={{ fontSize: 13, color: 'var(--gray-300)', fontWeight: 500, marginBottom: 12 }}>{t('No active feedback forms at the moment.')}</p>
+          <Btn variant="ghost" onClick={load}>{t('Refresh')}</Btn>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {forms.map(form => {
+        <div className="hr-card-grid">
+          {sortedForms.map(form => {
             const status = getStatus(form);
             const isPending = status === 'pending';
             return (
-              <div key={form.formID} onClick={() => handleOpen(form)} style={{
-                background: 'var(--white)', borderRadius: 28, padding: '26px',
+              <div key={form.formID} className="hr-click-card" onClick={() => handleOpen(form)} style={{
+                padding: '26px',
                 border: `2px solid ${isPending ? 'var(--red-mid)' : '#EAECF0'}`,
-                cursor: 'pointer', transition: 'all .2s',
-              }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-              >
+                cursor: 'pointer',
+              }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 14, background: isPending ? 'var(--red-light)' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <svg width="20" height="20" fill="none" stroke={isPending ? 'var(--red)' : '#16a34a'} strokeWidth="2" viewBox="0 0 24 24">
@@ -184,10 +245,10 @@ export function EmployeeFeedbackPage() {
                       }
                     </svg>
                   </div>
-                  <Badge label={isPending ? 'Pending' : 'Completed'} color={isPending ? 'red' : 'green'} />
+                  <Badge label={isPending ? t('Pending') : t('Completed')} color={isPending ? 'red' : 'green'} />
                 </div>
                 <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{form.title}</h3>
-                <p style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 4 }}>{form.questions?.length || 0} questions</p>
+                <p style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 4 }}>{form.questions?.length || 0} {t('questions')}</p>
                 {form.description && <p style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 16, lineHeight: 1.5 }}>{form.description}</p>}
                 <button style={{
                   width: '100%', padding: 11, borderRadius: 14, border: 'none',
@@ -197,7 +258,7 @@ export function EmployeeFeedbackPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   boxShadow: isPending ? 'var(--shadow-red)' : 'none',
                 }}>
-                  {isPending ? 'Fill Form' : 'View Responses'}
+                  {isPending ? t('Fill Form') : t('View Responses')}
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
@@ -237,16 +298,16 @@ export function EmployeeFeedbackPage() {
             <div style={{ marginTop: 24 }}>
               {getStatus(openForm) === 'pending' ? (
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <Btn variant="ghost" onClick={() => setOpenForm(null)} style={{ flex: 1 }}>Cancel</Btn>
+                  <Btn variant="ghost" onClick={() => setOpenForm(null)} style={{ flex: 1 }}>{t('Cancel')}</Btn>
                   <Btn onClick={handleSubmit} style={{ flex: 1 }} disabled={submitting}>
-                    {submitting ? 'Submitting...' : 'Submit Feedback'}
+                    {submitting ? t('Submitting...') : t('Submit Feedback')}
                   </Btn>
                 </div>
               ) : (
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: '#DCFCE7', color: '#15803D', borderRadius: 14, fontSize: 13, fontWeight: 700 }}>
                     <svg width="18" height="18" fill="none" stroke="#15803D" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    This form has been completed
+                    {t('This form has been completed')}
                   </span>
                 </div>
               )}

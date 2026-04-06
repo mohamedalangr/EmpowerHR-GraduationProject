@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -21,7 +22,7 @@ import nltk
 from nltk.corpus import stopwords, wordnet
 
 from .models import Job, Submission
-from .serializers import JobSerializer, SubmissionSerializer, SubmissionUploadSerializer
+from .serializers import JobSerializer, SubmissionSerializer, SubmissionUploadSerializer, SubmissionStageUpdateSerializer
 from .pipeline import run_pipeline, extract_skills, extract_text_from_pdf, compute_semantic_score
 
 # Download stopwords if not already
@@ -521,6 +522,19 @@ def rank_cvs_for_job(job_id):
 logger = logging.getLogger(__name__)
 
 
+def _build_stage_history_entry(*, from_stage, to_stage, note='', talent_pool=True, actor_name='System', actor_role='System', occurred_at=None):
+    event_time = occurred_at or timezone.now()
+    return {
+        'from_stage': from_stage,
+        'to_stage': to_stage,
+        'note': (note or '').strip(),
+        'talent_pool': bool(talent_pool),
+        'updated_by': actor_name,
+        'updated_by_role': actor_role,
+        'updated_at': event_time.isoformat(),
+    }
+
+
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
 
@@ -534,16 +548,21 @@ class JobListCreateView(ListCreateAPIView):
         description = serializer.validated_data.get("description", "")
         required_skills = extract_skills(description)
         serializer.save(required_skills=required_skills)
+
     def get_permissions(self):
         if self.request.method == 'GET':
-            return [IsAuthenticated()]
+            return [AllowAny()]
         return [IsHRManager()] 
 
 
 class JobDetailView(RetrieveUpdateAPIView):
-    permission_classes = [IsHRManager]
     queryset         = Job.objects.all()
     serializer_class = JobSerializer
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsHRManager()]
 
 
 class JobWeightsView(APIView):
@@ -572,6 +591,195 @@ class JobWeightsView(APIView):
         return Response(JobSerializer(job).data)
 
 
+class JobPipelineHealthView(APIView):
+    """GET /api/recruitment/jobs/health/ — hiring funnel and stale follow-up visibility for HR."""
+    permission_classes = [IsAuthenticated, IsHRManager]
+
+    STAGE_THRESHOLDS = {
+        Submission.ReviewStage.APPLIED: (3, 7),
+        Submission.ReviewStage.SHORTLISTED: (2, 5),
+        Submission.ReviewStage.INTERVIEW: (4, 7),
+        Submission.ReviewStage.HIRED: (3, 6),
+        Submission.ReviewStage.REJECTED: (2, 4),
+    }
+
+    def _classify_sla(self, stage, waiting_days):
+        at_risk_after, overdue_after = self.STAGE_THRESHOLDS.get(stage, (4, 7))
+        if waiting_days >= overdue_after:
+            return 'Overdue'
+        if waiting_days >= at_risk_after:
+            return 'At Risk'
+        return 'On Track'
+
+    def get(self, request):
+        now = timezone.now()
+        jobs = list(Job.objects.all().order_by('-created_at'))
+        submissions = list(
+            Submission.objects.select_related('job').order_by('-stage_updated_at', '-submitted_at')
+        )
+
+        funnel_summary = {
+            'appliedCount': 0,
+            'shortlistedCount': 0,
+            'interviewCount': 0,
+            'hiredCount': 0,
+            'rejectedCount': 0,
+        }
+        stage_to_key = {
+            Submission.ReviewStage.APPLIED: 'appliedCount',
+            Submission.ReviewStage.SHORTLISTED: 'shortlistedCount',
+            Submission.ReviewStage.INTERVIEW: 'interviewCount',
+            Submission.ReviewStage.HIRED: 'hiredCount',
+            Submission.ReviewStage.REJECTED: 'rejectedCount',
+        }
+
+        job_summary = {
+            job.id: {
+                'jobID': job.id,
+                'jobTitle': job.title,
+                'isActive': job.is_active,
+                'applicantCount': 0,
+                'inReviewCount': 0,
+                'interviewCount': 0,
+                'hiredCount': 0,
+                'rejectedCount': 0,
+                'talentPoolCount': 0,
+                'staleCandidates': 0,
+                'averageAtsScore': 0,
+                'daysOpen': max((now - job.created_at).days, 0) if job.created_at else 0,
+                'followUpState': 'On Track',
+                'lastActivityAt': job.created_at.isoformat() if job.created_at else None,
+                '_score_values': [],
+                '_has_overdue': False,
+            }
+            for job in jobs
+        }
+
+        follow_up_items = []
+
+        for submission in submissions:
+            stage = submission.review_stage or Submission.ReviewStage.APPLIED
+            stage_key = stage_to_key.get(stage)
+            if stage_key:
+                funnel_summary[stage_key] += 1
+
+            job = submission.job
+            job_entry = job_summary.setdefault(
+                job.id,
+                {
+                    'jobID': job.id,
+                    'jobTitle': job.title,
+                    'isActive': job.is_active,
+                    'applicantCount': 0,
+                    'inReviewCount': 0,
+                    'interviewCount': 0,
+                    'hiredCount': 0,
+                    'rejectedCount': 0,
+                    'talentPoolCount': 0,
+                    'staleCandidates': 0,
+                    'averageAtsScore': 0,
+                    'daysOpen': max((now - job.created_at).days, 0) if job.created_at else 0,
+                    'followUpState': 'On Track',
+                    'lastActivityAt': job.created_at.isoformat() if job.created_at else None,
+                    '_score_values': [],
+                    '_has_overdue': False,
+                },
+            )
+            job_entry['applicantCount'] += 1
+
+            if stage in [Submission.ReviewStage.APPLIED, Submission.ReviewStage.SHORTLISTED]:
+                job_entry['inReviewCount'] += 1
+            if stage == Submission.ReviewStage.INTERVIEW:
+                job_entry['interviewCount'] += 1
+            elif stage == Submission.ReviewStage.HIRED:
+                job_entry['hiredCount'] += 1
+            elif stage == Submission.ReviewStage.REJECTED:
+                job_entry['rejectedCount'] += 1
+
+            if submission.talent_pool:
+                job_entry['talentPoolCount'] += 1
+            if submission.ats_score is not None:
+                job_entry['_score_values'].append(float(submission.ats_score))
+
+            activity_time = submission.stage_updated_at or submission.submitted_at or now
+            waiting_days = max((now - activity_time).days, 0)
+            job_entry['lastActivityAt'] = activity_time.isoformat()
+
+            sla_state = self._classify_sla(stage, waiting_days)
+            if sla_state != 'On Track' and stage not in [Submission.ReviewStage.HIRED, Submission.ReviewStage.REJECTED]:
+                job_entry['staleCandidates'] += 1
+                if sla_state == 'Overdue':
+                    job_entry['_has_overdue'] = True
+                follow_up_items.append({
+                    'id': f'candidate-{submission.pk}',
+                    'type': 'Candidate Follow-Up',
+                    'jobTitle': job.title,
+                    'candidateName': submission.candidate_name or 'Candidate',
+                    'reviewStage': stage,
+                    'waitingDays': waiting_days,
+                    'slaState': sla_state,
+                    'summary': submission.stage_notes or 'Awaiting the next hiring decision.',
+                    'path': f'/hr/cv-ranking?job={job.id}',
+                })
+
+        for job in jobs:
+            entry = job_summary[job.id]
+            if entry['_score_values']:
+                entry['averageAtsScore'] = round(sum(entry['_score_values']) / len(entry['_score_values']), 1)
+
+            if not entry['applicantCount'] and job.is_active and entry['daysOpen'] >= 7:
+                entry['followUpState'] = 'At Risk'
+                follow_up_items.append({
+                    'id': f'role-{job.id}',
+                    'type': 'Role Coverage',
+                    'jobTitle': job.title,
+                    'candidateName': '',
+                    'reviewStage': 'Open Requisition',
+                    'waitingDays': entry['daysOpen'],
+                    'slaState': 'At Risk',
+                    'summary': 'Active role has no applicants in the pipeline yet.',
+                    'path': '/hr/jobs',
+                })
+            elif entry['_has_overdue']:
+                entry['followUpState'] = 'Overdue'
+            elif entry['staleCandidates']:
+                entry['followUpState'] = 'At Risk'
+            elif not job.is_active:
+                entry['followUpState'] = 'Paused'
+
+            entry.pop('_score_values', None)
+            entry.pop('_has_overdue', None)
+
+        state_rank = {'Overdue': 0, 'At Risk': 1, 'On Track': 2, 'Paused': 3}
+        job_breakdown = sorted(
+            job_summary.values(),
+            key=lambda item: (
+                state_rank.get(item['followUpState'], 4),
+                -item['staleCandidates'],
+                -item['applicantCount'],
+                -item['daysOpen'],
+            ),
+        )
+        sorted_follow_up = sorted(
+            follow_up_items,
+            key=lambda item: ((item['slaState'] == 'Overdue'), item['waitingDays']),
+            reverse=True,
+        )[:8]
+
+        return Response({
+            'totals': {
+                'activeJobs': sum(1 for job in jobs if job.is_active),
+                'totalCandidates': len(submissions),
+                'staleCandidates': sum(item['staleCandidates'] for item in job_breakdown),
+                'jobsWithoutApplicants': sum(1 for item in job_breakdown if item['isActive'] and item['applicantCount'] == 0),
+                'talentPoolCandidates': sum(1 for submission in submissions if submission.talent_pool),
+            },
+            'funnelSummary': funnel_summary,
+            'jobBreakdown': job_breakdown,
+            'followUpItems': sorted_follow_up,
+        })
+
+
 # ── Submissions ───────────────────────────────────────────────────────────────
 
 class SubmitResumeView(APIView):
@@ -581,13 +789,29 @@ class SubmitResumeView(APIView):
     Accepts multipart/form-data with: job, candidate_name, candidate_email, resume_file
     Runs the full pipeline synchronously and returns results.
     """
-    permission_classes = [IsCandidate]
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = SubmissionUploadSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         submission = serializer.save(status=Submission.Status.PENDING)
+        created_at = timezone.now()
+        if not submission.stage_history:
+            submission.stage_updated_at = created_at
+            submission.stage_history = [
+                _build_stage_history_entry(
+                    from_stage=Submission.ReviewStage.APPLIED,
+                    to_stage=Submission.ReviewStage.APPLIED,
+                    note='Application submitted and queued for HR review.',
+                    talent_pool=submission.talent_pool,
+                    actor_name='System',
+                    actor_role='System',
+                    occurred_at=created_at,
+                )
+            ]
+            submission.save(update_fields=['stage_updated_at', 'stage_history'])
 
         try:
             run_pipeline(submission)
@@ -601,6 +825,46 @@ class SubmitResumeView(APIView):
                 {"detail": f"Pipeline failed: {str(exc)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+
+class CandidateApplicationListView(APIView):
+    """GET /api/recruitment/applications/?email=...&tracking_code=... — safely view candidate application updates."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        email = (request.query_params.get("email") or "").strip().lower()
+        tracking_code = (request.query_params.get("tracking_code") or "").strip().upper()
+        is_authenticated_candidate = bool(
+            request.user and request.user.is_authenticated and getattr(request.user, 'role', '') == 'Candidate'
+        )
+
+        if is_authenticated_candidate:
+            owner_email = (getattr(request.user, "email", "") or "").strip().lower()
+            if not email:
+                email = owner_email
+            elif email != owner_email:
+                return Response(
+                    {"detail": "You can only view your own applications from this account."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif not tracking_code:
+            return Response(
+                {"detail": "A tracking code is required to view application updates."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not email:
+            return Response(
+                {"detail": "Candidate email is required to track applications."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        submissions = Submission.objects.select_related("job").filter(candidate_email__iexact=email)
+        if not is_authenticated_candidate:
+            submissions = submissions.filter(tracking_code__iexact=tracking_code)
+
+        submissions = submissions.order_by("-stage_updated_at", "-submitted_at")
+        return Response(SubmissionSerializer(submissions, many=True).data)
 
 
 class JobSubmissionsView(APIView):
@@ -647,9 +911,15 @@ class JobSubmissionsView(APIView):
                     "job_title": "",
                     "candidate_name": candidate_name,
                     "candidate_email": "",
+                    "tracking_code": "",
                     "resume_file": f"/media/{relative_path}",
                     "resume_filename": filename,
                     "status": "MEDIA",
+                    "review_stage": "Applied",
+                    "stage_notes": "Imported from media library",
+                    "stage_updated_at": modified_iso,
+                    "talent_pool": False,
+                    "stage_history": [],
                     "error_message": "",
                     "candidate_skills": [],
                     "candidate_degree": "",
@@ -669,12 +939,84 @@ class JobSubmissionsView(APIView):
 class SubmissionDetailView(APIView):
     """GET /api/submissions/{id}/"""
     permission_classes = [IsHRManager]
+
     def get(self, request, pk):
         try:
             sub = Submission.objects.get(pk=pk)
         except Submission.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(SubmissionSerializer(sub).data)
+
+
+ALLOWED_STAGE_TRANSITIONS = {
+    Submission.ReviewStage.APPLIED: {
+        Submission.ReviewStage.APPLIED,
+        Submission.ReviewStage.SHORTLISTED,
+        Submission.ReviewStage.INTERVIEW,
+        Submission.ReviewStage.REJECTED,
+    },
+    Submission.ReviewStage.SHORTLISTED: {
+        Submission.ReviewStage.SHORTLISTED,
+        Submission.ReviewStage.INTERVIEW,
+        Submission.ReviewStage.REJECTED,
+    },
+    Submission.ReviewStage.INTERVIEW: {
+        Submission.ReviewStage.INTERVIEW,
+        Submission.ReviewStage.SHORTLISTED,
+        Submission.ReviewStage.HIRED,
+        Submission.ReviewStage.REJECTED,
+    },
+    Submission.ReviewStage.HIRED: {Submission.ReviewStage.HIRED},
+    Submission.ReviewStage.REJECTED: {Submission.ReviewStage.REJECTED},
+}
+
+
+class SubmissionStageUpdateView(APIView):
+    """POST /api/recruitment/submissions/{id}/stage/ — update a candidate's hiring stage."""
+    permission_classes = [IsHRManager]
+
+    def post(self, request, pk):
+        try:
+            submission = Submission.objects.get(pk=pk)
+        except Submission.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = SubmissionStageUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        next_stage = serializer.validated_data['review_stage']
+        current_stage = submission.review_stage or Submission.ReviewStage.APPLIED
+        allowed_next = ALLOWED_STAGE_TRANSITIONS.get(current_stage, {current_stage})
+        if next_stage not in allowed_next:
+            return Response(
+                {"detail": f"Invalid hiring stage transition from {current_stage} to {next_stage}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        submission.review_stage = next_stage
+        if 'stage_notes' in serializer.validated_data:
+            submission.stage_notes = serializer.validated_data['stage_notes']
+        if 'talent_pool' in serializer.validated_data:
+            submission.talent_pool = serializer.validated_data['talent_pool']
+
+        updated_at = timezone.now()
+        history = list(submission.stage_history or [])
+        history.append(
+            _build_stage_history_entry(
+                from_stage=current_stage,
+                to_stage=next_stage,
+                note=submission.stage_notes,
+                talent_pool=submission.talent_pool,
+                actor_name=getattr(request.user, 'full_name', '') or getattr(request.user, 'email', '') or 'HR team',
+                actor_role=getattr(request.user, 'role', '') or 'HRManager',
+                occurred_at=updated_at,
+            )
+        )
+        submission.stage_history = history
+        submission.stage_updated_at = updated_at
+        submission.save(update_fields=['review_stage', 'stage_notes', 'talent_pool', 'stage_history', 'stage_updated_at'])
+
+        return Response(SubmissionSerializer(submission).data)
 
 
 class JobCVRankingView(APIView):

@@ -40,16 +40,16 @@ class SubmissionSerializer(serializers.ModelSerializer):
         model  = Submission
         fields = [
             "id", "job", "job_title",
-            "candidate_name", "candidate_email",
+            "candidate_name", "candidate_email", "tracking_code",
             "resume_file", "resume_filename",
-            "status", "error_message",
+            "status", "review_stage", "stage_notes", "stage_updated_at", "talent_pool", "stage_history", "error_message",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",
             "submitted_at", "scored_at",
         ]
         read_only_fields = [
-            "status", "error_message",
+            "tracking_code", "status", "review_stage", "stage_notes", "stage_updated_at", "talent_pool", "stage_history", "error_message",
             "candidate_skills", "candidate_degree", "candidate_years_exp",
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",
@@ -70,3 +70,14 @@ class SubmissionUploadSerializer(serializers.ModelSerializer):
         if value.size > 10 * 1024 * 1024:
             raise serializers.ValidationError("File too large (max 10 MB).")
         return value
+
+
+class SubmissionStageUpdateSerializer(serializers.Serializer):
+    review_stage = serializers.ChoiceField(choices=Submission.ReviewStage.choices)
+    stage_notes = serializers.CharField(required=False, allow_blank=True)
+    talent_pool = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        if attrs.get('review_stage') in {Submission.ReviewStage.REJECTED, Submission.ReviewStage.HIRED} and not (attrs.get('stage_notes') or '').strip():
+            raise serializers.ValidationError({'stage_notes': 'Please add a short hiring note before finalizing this stage.'})
+        return attrs

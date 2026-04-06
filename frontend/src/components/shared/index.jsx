@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 
 // ── SPINNER ──────────────────────────────────────────────────────────────────
 export function Spinner({ size = 36 }) {
@@ -35,7 +35,7 @@ export function ToastContainer() {
   }, []);
 
   return (
-    <div style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div aria-live="polite" aria-atomic="true" style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 999, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {toasts.map(t => (
         <div key={t.id} style={{
           background: 'var(--gray-900)', color: '#fff',
@@ -60,6 +60,8 @@ export function ToastContainer() {
 
 // ── MODAL ────────────────────────────────────────────────────────────────────
 export function Modal({ open, onClose, title, children, maxWidth = 520 }) {
+  const titleId = useId();
+
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
     if (open) window.addEventListener('keydown', handler);
@@ -76,19 +78,29 @@ export function Modal({ open, onClose, title, children, maxWidth = 520 }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
       }}
     >
-      <div style={{
-        background: 'var(--white)', borderRadius: 32,
-        width: '100%', maxWidth,
-        boxShadow: '0 24px 80px rgba(0,0,0,.14)',
-        animation: 'slideUp .25s cubic-bezier(.22,.68,0,1.2)',
-        maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
-      }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        style={{
+          background: 'var(--white)', borderRadius: 32,
+          width: '100%', maxWidth,
+          boxShadow: '0 24px 80px rgba(0,0,0,.14)',
+          animation: 'slideUp .25s cubic-bezier(.22,.68,0,1.2)',
+          maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}
+      >
         <div style={{ padding: '28px 32px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ fontSize: 20, fontWeight: 700 }}>{title}</h3>
-          <button onClick={onClose} style={{
-            width: 36, height: 36, border: 'none', background: 'var(--gray-100)',
-            borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-          }}>
+          <h3 id={titleId} style={{ fontSize: 20, fontWeight: 700 }}>{title}</h3>
+          <button
+            type="button"
+            aria-label="Close dialog"
+            onClick={onClose}
+            style={{
+              width: 36, height: 36, border: 'none', background: 'var(--gray-100)',
+              borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+            }}
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--gray-700)" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -99,38 +111,74 @@ export function Modal({ open, onClose, title, children, maxWidth = 520 }) {
 }
 
 // ── INPUT ────────────────────────────────────────────────────────────────────
-export function Input({ label, ...props }) {
+export function Input({ label, id, style, onFocus, onBlur, ...props }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div style={{ marginBottom: 16 }}>
-      {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{label}</label>}
-      <input {...props} style={{
-        width: '100%', padding: '12px 16px',
-        background: 'var(--gray-100)', border: '2px solid transparent',
-        borderRadius: 14, fontSize: 14, fontWeight: 500,
-        color: 'var(--gray-900)', outline: 'none', transition: 'all .2s',
-        ...props.style,
-      }}
-        onFocus={e => { e.target.style.background = 'var(--white)'; e.target.style.borderColor = 'var(--red)'; }}
-        onBlur={e => { e.target.style.background = 'var(--gray-100)'; e.target.style.borderColor = 'transparent'; }}
+      {label && <label htmlFor={inputId} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{label}</label>}
+      <input
+        {...props}
+        id={inputId}
+        aria-label={props['aria-label'] || label}
+        style={{
+          width: '100%', padding: '12px 16px',
+          background: '#fff', border: '1.5px solid #E7EAEE',
+          borderRadius: 14, fontSize: 14, fontWeight: 500,
+          color: 'var(--gray-900)', outline: 'none', transition: 'all .2s',
+          boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+          ...style,
+        }}
+        onFocus={e => {
+          onFocus?.(e);
+          e.target.style.background = '#fff';
+          e.target.style.borderColor = 'var(--red)';
+          e.target.style.boxShadow = '0 0 0 4px rgba(232,50,26,.08)';
+        }}
+        onBlur={e => {
+          onBlur?.(e);
+          e.target.style.background = '#fff';
+          e.target.style.borderColor = '#E7EAEE';
+          e.target.style.boxShadow = '0 1px 2px rgba(17,19,24,.03)';
+        }}
       />
     </div>
   );
 }
 
-export function Textarea({ label, ...props }) {
+export function Textarea({ label, id, style, onFocus, onBlur, ...props }) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+
   return (
     <div style={{ marginBottom: 16 }}>
-      {label && <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{label}</label>}
-      <textarea {...props} style={{
-        width: '100%', padding: '12px 16px',
-        background: 'var(--gray-100)', border: '2px solid transparent',
-        borderRadius: 14, fontSize: 14, fontWeight: 500,
-        color: 'var(--gray-900)', outline: 'none', transition: 'all .2s',
-        resize: 'vertical', minHeight: 90,
-        ...props.style,
-      }}
-        onFocus={e => { e.target.style.background = 'var(--white)'; e.target.style.borderColor = 'var(--red)'; }}
-        onBlur={e => { e.target.style.background = 'var(--gray-100)'; e.target.style.borderColor = 'transparent'; }}
+      {label && <label htmlFor={inputId} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{label}</label>}
+      <textarea
+        {...props}
+        id={inputId}
+        aria-label={props['aria-label'] || label}
+        style={{
+          width: '100%', padding: '12px 16px',
+          background: '#fff', border: '1.5px solid #E7EAEE',
+          borderRadius: 14, fontSize: 14, fontWeight: 500,
+          color: 'var(--gray-900)', outline: 'none', transition: 'all .2s',
+          resize: 'vertical', minHeight: 90,
+          boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+          ...style,
+        }}
+        onFocus={e => {
+          onFocus?.(e);
+          e.target.style.background = '#fff';
+          e.target.style.borderColor = 'var(--red)';
+          e.target.style.boxShadow = '0 0 0 4px rgba(232,50,26,.08)';
+        }}
+        onBlur={e => {
+          onBlur?.(e);
+          e.target.style.background = '#fff';
+          e.target.style.borderColor = '#E7EAEE';
+          e.target.style.boxShadow = '0 1px 2px rgba(17,19,24,.03)';
+        }}
       />
     </div>
   );
@@ -142,6 +190,9 @@ export function Badge({ label, color }) {
     green:  { bg: '#F0FDF4', text: '#15803D' },
     red:    { bg: 'var(--red-light)', text: 'var(--red)' },
     orange: { bg: '#FFF7ED', text: '#C2410C' },
+    yellow: { bg: '#FEF3C7', text: '#B54708' },
+    blue:   { bg: '#EFF8FF', text: '#175CD3' },
+    slate:  { bg: '#F8FAFC', text: '#475467' },
     gray:   { bg: 'var(--gray-100)', text: 'var(--gray-500)' },
     accent: { bg: 'var(--accent-light)', text: '#8B4A42' },
   };
@@ -152,6 +203,8 @@ export function Badge({ label, color }) {
       fontSize: 11, fontWeight: 700,
       background: c.bg, color: c.text,
       display: 'inline-block',
+      border: '1px solid rgba(17,19,24,.05)',
+      letterSpacing: '.01em',
     }}>{label}</span>
   );
 }
@@ -159,23 +212,31 @@ export function Badge({ label, color }) {
 // ── BUTTON ───────────────────────────────────────────────────────────────────
 export function Btn({ children, variant = 'primary', size = 'md', ...props }) {
   const base = {
-    border: 'none', borderRadius: 14, fontWeight: 700,
-    cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+    border: '1px solid transparent', borderRadius: 14, fontWeight: 700,
+    cursor: props.disabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center',
     justifyContent: 'center', gap: 7, transition: 'all .15s',
     fontSize: size === 'sm' ? 12 : 14,
     padding: size === 'sm' ? '7px 14px' : '11px 22px',
+    opacity: props.disabled ? 0.65 : 1,
   };
   const variants = {
     primary: { background: 'var(--red)', color: '#fff', boxShadow: 'var(--shadow-red)' },
-    ghost:   { background: 'var(--gray-100)', color: 'var(--gray-700)' },
-    danger:  { background: '#FFF0ED', color: 'var(--red)' },
-    accent:  { background: 'var(--accent-light)', color: '#8B4A42' },
-    outline: { background: 'transparent', color: 'var(--red)', border: '2px solid var(--red)' },
+    ghost:   { background: '#F8FAFC', color: 'var(--gray-700)', border: '1px solid #E7EAEE' },
+    danger:  { background: '#FFF5F3', color: 'var(--red)', border: '1px solid #FAD7D1' },
+    accent:  { background: 'var(--accent-light)', color: '#8B4A42', border: '1px solid #EED3CE' },
+    outline: { background: '#fff', color: 'var(--red)', border: '1px solid #F2B6AA' },
   };
   return (
     <button {...props} style={{ ...base, ...variants[variant], ...props.style }}
-      onMouseEnter={e => { if (variant === 'primary') e.currentTarget.style.background = '#d02a14'; }}
-      onMouseLeave={e => { if (variant === 'primary') e.currentTarget.style.background = 'var(--red)'; }}
+      onMouseEnter={e => {
+        if (props.disabled) return;
+        e.currentTarget.style.transform = 'translateY(-1px)';
+        if (variant === 'primary') e.currentTarget.style.background = '#d02a14';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        if (variant === 'primary') e.currentTarget.style.background = 'var(--red)';
+      }}
     >
       {children}
     </button>

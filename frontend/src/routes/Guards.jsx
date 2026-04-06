@@ -25,13 +25,19 @@ export function ProtectedRoute() {
  *     <Route path="/admin/dashboard" element={<AdminDashboard />} />
  *   </Route>
  */
-export function RoleRoute({ allowed }) {
-  const { user, loading } = useAuth();
+export function RoleRoute({ allowed = [], requiredPermission, requiredAnyPermissions = [] }) {
+  const { user, loading, hasPermission } = useAuth();
 
   if (loading) return <div className="auth-loading">Loading...</div>;
   if (!user)   return <Navigate to="/login" replace />;
 
-  if (!allowed.includes(user.role)) {
+  const roleBlocked = Array.isArray(allowed) && allowed.length > 0 && !allowed.includes(user.role);
+  const permissionBlocked = requiredPermission && !hasPermission(requiredPermission);
+  const anyPermissionBlocked = Array.isArray(requiredAnyPermissions)
+    && requiredAnyPermissions.length > 0
+    && !hasPermission(requiredAnyPermissions);
+
+  if (roleBlocked || permissionBlocked || anyPermissionBlocked) {
     return <Navigate to="/unauthorized" replace />;
   }
 
