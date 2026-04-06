@@ -6,8 +6,6 @@ from collections import Counter
 from difflib import SequenceMatcher
 from datetime import datetime, timezone as dt_timezone
 from pathlib import Path
-import numpy as np
-import pandas as pd
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
@@ -16,30 +14,34 @@ from rest_framework.response import Response
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView
 from accounts.permissions import IsHRManager, IsCandidate
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import nltk
 from nltk.corpus import stopwords, wordnet
 
 from .models import Job, Submission
 from .serializers import JobSerializer, SubmissionSerializer, SubmissionUploadSerializer, SubmissionStageUpdateSerializer
-from .pipeline import run_pipeline, extract_skills, extract_text_from_pdf, compute_semantic_score
 
-# Download stopwords if not already
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords')
+_PIPELINE_FUNCS = None
 
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
 
-try:
-    nltk.data.find('corpora/omw-1.4')
-except LookupError:
-    nltk.download('omw-1.4')
+def _get_pipeline_functions():
+    global _PIPELINE_FUNCS
+    if _PIPELINE_FUNCS is None:
+        from .pipeline import run_pipeline, extract_skills, extract_text_from_pdf, compute_semantic_score
+
+        _PIPELINE_FUNCS = {
+            "run_pipeline": run_pipeline,
+            "extract_skills": extract_skills,
+            "extract_text_from_pdf": extract_text_from_pdf,
+            "compute_semantic_score": compute_semantic_score,
+        }
+    return _PIPELINE_FUNCS
+
+
+def _ensure_nltk_resource(resource_path, download_name):
+    try:
+        nltk.data.find(resource_path)
+    except LookupError:
+        nltk.download(download_name, quiet=True)
 
 # CV Ranking Logic
 SKILL_SYNONYMS = {
@@ -142,7 +144,7 @@ def _safe_extract_resume_text(file_bytes, file_name):
         return ""
     lowered = (file_name or "").lower()
     if lowered.endswith(".pdf"):
-        return extract_text_from_pdf(io.BytesIO(file_bytes))
+        return _get_pipeline_functions()["extract_text_from_pdf"](io.BytesIO(file_bytes))
     if lowered.endswith(".txt"):
         return file_bytes.decode("utf-8", errors="ignore")
     return ""
@@ -155,6 +157,8 @@ def _to_skill_set(skills):
 def _wordnet_skill_aliases(skill):
     aliases = set()
     normalized_skill = normalize_text(skill)
+    _ensure_nltk_resource('corpora/wordnet', 'wordnet')
+    _ensure_nltk_resource('corpora/omw-1.4', 'omw-1.4')
     for token in normalized_skill.split():
         if len(token) < 3:
             continue
@@ -306,9 +310,14 @@ def _adaptive_weights(semantic_score, tfidf_score, skill_match_pct, required_cou
 
 
 def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
+    import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+
     key_skills = key_skills if key_skills is not None else (job.required_skills or [])
     job_description = job_description if job_description is not None else (job.description or "")
 
+    _ensure_nltk_resource('corpora/stopwords', 'stopwords')
     required_skill_set = _to_skill_set(key_skills)
     intelligence = _learn_job_intelligence(job, required_skill_set)
     skill_map = build_skill_map(key_skills, learned_aliases=intelligence["learned_aliases"])
@@ -382,7 +391,7 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
 
         tfidf_score = float(similarities[i][0] * 100) if i < len(similarities) else 0.0
         try:
-            semantic_score = float(compute_semantic_score(cv_text, job_description))
+            semantic_score = float(_get_pipeline_functions()["compute_semantic_score"](cv_text, job_description))
         except Exception:
             semantic_score = tfidf_score
 
@@ -546,7 +555,7 @@ class JobListCreateView(ListCreateAPIView):
     def perform_create(self, serializer):
         # Auto-extract required_skills from JD text when job is created
         description = serializer.validated_data.get("description", "")
-        required_skills = extract_skills(description)
+        required_skills = _get_pipeline_functions()["extract_skills"](description)
         serializer.save(required_skills=required_skills)
 
     def get_permissions(self):
@@ -814,7 +823,7 @@ class SubmitResumeView(APIView):
             submission.save(update_fields=['stage_updated_at', 'stage_history'])
 
         try:
-            run_pipeline(submission)
+            _get_pipeline_functions()["run_pipeline"](submission)
             submission.refresh_from_db()
             return Response(
                 SubmissionSerializer(submission).data,

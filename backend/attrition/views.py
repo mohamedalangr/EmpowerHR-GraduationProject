@@ -6,7 +6,6 @@ from rest_framework.permissions import IsAuthenticated
 from accounts.permissions import IsHRManager
 from feedback.models import FeedbackForm, FeedbackSubmission
 from .models import AttritionPrediction
-from .predictor import predict_risk
 from .serializers import AttritionPredictionSerializer
 
 
@@ -27,6 +26,8 @@ class RunAttritionPredictionView(APIView):
     """
 
     def post(self, request):
+        from .predictor import predict_risk
+
         # Find the form to use
         form_id = request.data.get('form_id')
         if form_id:
