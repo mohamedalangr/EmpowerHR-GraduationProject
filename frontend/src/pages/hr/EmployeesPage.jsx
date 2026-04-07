@@ -11,7 +11,7 @@ import {
   hrChangeEmployeeRole,
   getPredictions,
 } from '../../api/index.js';
-import { Spinner, Modal, Btn, Badge, Input, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Spinner, Modal, Btn, Badge, DatalistInput, Input, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -152,6 +152,8 @@ export function HREmployeesPage() {
   }, [employees, filters]);
 
   const departments = useMemo(() => uniqueValues(employees, 'department'), [employees]);
+  const jobTitles = useMemo(() => uniqueValues(employees, 'jobTitle'), [employees]);
+  const teams = useMemo(() => uniqueValues(employees, 'team'), [employees]);
   const roles = useMemo(() => uniqueValues(employees, 'role'), [employees]);
   const locations = useMemo(() => uniqueValues(employees, 'location'), [employees]);
   const activeCount = employees.filter(employee => employee.employmentStatus === 'Active').length;
@@ -399,13 +401,13 @@ export function HREmployeesPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Input label={t('Job Title')} value={form.jobTitle} onChange={setField('jobTitle')} placeholder="e.g. HR Specialist" />
-        <Input label={t('Department')} value={form.department} onChange={setField('department')} placeholder="e.g. Human Resources" />
+        <DatalistInput label={t('Job Title')} value={form.jobTitle} options={jobTitles} onChange={setField('jobTitle')} placeholder="Select or type a job title" />
+        <DatalistInput label={t('Department')} value={form.department} options={departments} onChange={setField('department')} placeholder="Select or type a department" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Input label={t('Team')} value={form.team} onChange={setField('team')} placeholder="e.g. Talent Operations" />
-        <Input label={t('Location')} value={form.location} onChange={setField('location')} placeholder="e.g. Cairo" />
+        <DatalistInput label={t('Team')} value={form.team} options={teams} onChange={setField('team')} placeholder="Select or type a team" />
+        <DatalistInput label={t('Location')} value={form.location} options={locations} onChange={setField('location')} placeholder="Select or type a location" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -724,13 +726,13 @@ export function HREmployeesPage() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Input label={t('New Job Title')} value={roleChange.jobTitle} onChange={setRoleChangeField('jobTitle')} placeholder="e.g. Senior HR Specialist" />
+          <DatalistInput label={t('New Job Title')} value={roleChange.jobTitle} options={jobTitles} onChange={setRoleChangeField('jobTitle')} placeholder="Select or type a job title" />
           <Input label={t('New Monthly Income')} type="number" min="0" value={roleChange.monthlyIncome} onChange={setRoleChangeField('monthlyIncome')} placeholder="e.g. 18000" />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Input label="Department" value={roleChange.department} onChange={setRoleChangeField('department')} placeholder="Department" />
-          <Input label="Team" value={roleChange.team} onChange={setRoleChangeField('team')} placeholder="Team" />
+          <DatalistInput label="Department" value={roleChange.department} options={departments} onChange={setRoleChangeField('department')} placeholder="Select or type a department" />
+          <DatalistInput label="Team" value={roleChange.team} options={teams} onChange={setRoleChangeField('team')} placeholder="Select or type a team" />
         </div>
 
         <Textarea label={t('Notes')} value={roleChange.notes} onChange={setRoleChangeField('notes')} placeholder={t('Reason for promotion / demotion')} />

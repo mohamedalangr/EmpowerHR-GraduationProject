@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateTraining, hrGetTraining, hrGetTrainingCompliance } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -59,6 +59,8 @@ export function HRTrainingPage() {
     dueSoon: compliance?.summary?.dueSoonCourses ?? 0,
     overdue: compliance?.summary?.overdueCourses ?? 0,
   }), [compliance, courses]);
+
+  const courseTitles = useMemo(() => [...new Set(courses.map((course) => course.title).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [courses]);
 
   const handleCreate = async () => {
     if (!form.title.trim()) {
@@ -255,7 +257,7 @@ export function HRTrainingPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Training Course')}</h3>
-          <Input label={t('Course Title')} value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder={t('Advanced React Workshop')} />
+          <DatalistInput label={t('Course Title')} value={form.title} options={courseTitles} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder={t('Select or type a course title')} />
           <Textarea label={t('Description')} value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder={t('Describe the learning objective')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

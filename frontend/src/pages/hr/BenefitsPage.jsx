@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateBenefit, hrGetBenefitWatch, hrGetBenefits } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -92,6 +92,10 @@ export function HRBenefitsPage() {
     pending: watchSummary.pendingCount ?? benefits.filter((item) => item.status === 'Pending').length,
     followUp: watchSummary.followUpCount ?? 0,
   }), [benefits, watchSummary]);
+
+  const benefitNames = useMemo(() => [...new Set(benefits.map((item) => item.benefitName).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
+  const providers = useMemo(() => [...new Set(benefits.map((item) => item.provider).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
+  const coverageLevels = useMemo(() => [...new Set(benefits.map((item) => item.coverageLevel).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
 
   const handleExportWatch = () => {
     try {
@@ -289,7 +293,7 @@ export function HRBenefitsPage() {
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Benefit Enrollment')}</h3>
           <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
-          <Input label={t('Benefit Name')} value={form.benefitName} onChange={(e) => setForm((prev) => ({ ...prev, benefitName: e.target.value }))} placeholder={t('Premium Health Plan')} />
+          <DatalistInput label={t('Benefit Name')} value={form.benefitName} options={benefitNames} onChange={(e) => setForm((prev) => ({ ...prev, benefitName: e.target.value }))} placeholder={t('Select or type a benefit name')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
@@ -307,8 +311,8 @@ export function HRBenefitsPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label={t('Provider')} value={form.provider} onChange={(e) => setForm((prev) => ({ ...prev, provider: e.target.value }))} placeholder="AXA / MetLife" />
-            <Input label={t('Coverage Level')} value={form.coverageLevel} onChange={(e) => setForm((prev) => ({ ...prev, coverageLevel: e.target.value }))} placeholder={t('Employee + Family')} />
+            <DatalistInput label={t('Provider')} value={form.provider} options={providers} onChange={(e) => setForm((prev) => ({ ...prev, provider: e.target.value }))} placeholder="Select or type a provider" />
+            <DatalistInput label={t('Coverage Level')} value={form.coverageLevel} options={coverageLevels} onChange={(e) => setForm((prev) => ({ ...prev, coverageLevel: e.target.value }))} placeholder={t('Select or type a coverage level')} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

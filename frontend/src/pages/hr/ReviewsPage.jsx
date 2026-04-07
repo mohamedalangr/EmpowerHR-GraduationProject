@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateReview, hrGetReviewCalibration, hrGetReviews } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -72,6 +72,8 @@ export function HRReviewsPage() {
       : '0.0';
     return { total, pendingAcknowledgements, acknowledged, calibrationAlerts, averageRating };
   }, [calibration, reviews]);
+
+  const reviewPeriods = useMemo(() => [...new Set(reviews.map((review) => review.reviewPeriod).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [reviews]);
 
   const priorityTone = (priority) => {
     if (priority === 'Critical') return 'red';
@@ -262,7 +264,7 @@ export function HRReviewsPage() {
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Review')}</h3>
           <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
-          <Input label={t('Review Period')} value={form.reviewPeriod} onChange={(e) => setForm((prev) => ({ ...prev, reviewPeriod: e.target.value }))} placeholder="Q2 2026" />
+          <DatalistInput label={t('Review Period')} value={form.reviewPeriod} options={reviewPeriods} onChange={(e) => setForm((prev) => ({ ...prev, reviewPeriod: e.target.value }))} placeholder="Q2 2026" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateShift, hrGetShifts, hrGetShiftWatch } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -94,6 +94,8 @@ export function HRShiftsPage() {
     coverageRisks: watchSummary.coverageRiskCount ?? 0,
     completed: watchSummary.completedCount ?? shifts.filter((shift) => shift.status === 'Completed').length,
   }), [shifts, watchSummary]);
+
+  const shiftLocations = useMemo(() => [...new Set(shifts.map((shift) => shift.location).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [shifts]);
 
   const handleCreate = async () => {
     if (!form.employeeID.trim() || !form.shiftDate || !form.startTime || !form.endTime) {
@@ -303,7 +305,7 @@ export function HRShiftsPage() {
             <Input label={t('End Time')} type="time" value={form.endTime} onChange={(e) => setForm((prev) => ({ ...prev, endTime: e.target.value }))} />
           </div>
 
-          <Input label={t('Location')} value={form.location} onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))} placeholder={t('Cairo HQ / Remote')} />
+          <DatalistInput label={t('Location')} value={form.location} options={shiftLocations} onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))} placeholder={t('Select or type a location')} />
           <div>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--gray-500)', marginBottom: 6 }}>{t('Status')}</label>
             <select value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: '1px solid #E5E7EB', marginBottom: 12 }}>
