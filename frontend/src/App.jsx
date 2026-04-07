@@ -1,4 +1,4 @@
-import { BrowserRouter, HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ProtectedRoute, RoleRoute } from "./routes/Guards";
@@ -62,10 +62,8 @@ import { EmployeeCareersPage } from "./pages/candidate/CareersPage";
 import { CandidateApplicationsPage, CandidateDashboardPage } from "./pages/candidate/WorkspacePage";
 
 export default function App() {
-  const Router = process.env.NODE_ENV === "production" ? HashRouter : BrowserRouter;
-
   return (
-    <Router>
+    <BrowserRouter>
       <LanguageProvider>
         <AuthProvider>
           <Routes>
@@ -197,6 +195,6 @@ export default function App() {
           </Routes>
         </AuthProvider>
       </LanguageProvider>
-    </Router>
+    </BrowserRouter>
   );
 }
