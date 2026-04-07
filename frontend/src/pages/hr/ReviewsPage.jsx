@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateReview, hrGetReviewCalibration, hrGetReviews } from '../../api/index.js';
-import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -37,6 +37,7 @@ export function HRReviewsPage() {
     followUpItems: [],
   });
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -74,6 +75,22 @@ export function HRReviewsPage() {
   }, [calibration, reviews]);
 
   const reviewPeriods = useMemo(() => [...new Set(reviews.map((review) => review.reviewPeriod).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [reviews]);
+
+  const applyEmployeeDefaults = (employee) => {
+    setSelectedEmployee(employee || null);
+    if (!employee) return;
+
+    const suggestedSummary = [
+      employee.jobTitle ? `Current role: ${employee.jobTitle}` : '',
+      employee.department ? `Department: ${employee.department}` : '',
+      employee.team ? `Team: ${employee.team}` : '',
+    ].filter(Boolean).join(' • ');
+
+    setForm((prev) => ({
+      ...prev,
+      goalsSummary: !prev.goalsSummary.trim() && suggestedSummary ? suggestedSummary : prev.goalsSummary,
+    }));
+  };
 
   const priorityTone = (priority) => {
     if (priority === 'Critical') return 'red';
@@ -263,7 +280,19 @@ export function HRReviewsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Review')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))}
+            onEmployeeChange={applyEmployeeDefaults}
+            placeholder={t('Select an employee')}
+            helperText={t('Selecting an employee brings in the current role, department, and team for review context.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            note="Review context was fetched from the employee profile and can still be adjusted in the form."
+          />
           <DatalistInput label={t('Review Period')} value={form.reviewPeriod} options={reviewPeriods} onChange={(e) => setForm((prev) => ({ ...prev, reviewPeriod: e.target.value }))} placeholder="Q2 2026" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreatePayroll, hrGetPayroll, hrGetPayrollWatch, hrMarkPayrollPaid } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -58,6 +58,7 @@ export function HRPayrollPage() {
   const isAdminView = user?.role === 'Admin';
   const [records, setRecords] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [markingId, setMarkingId] = useState(null);
@@ -96,6 +97,16 @@ export function HRPayrollPage() {
 
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const applyEmployeeDefaults = (employee) => {
+    setSelectedEmployee(employee || null);
+    setForm((prev) => ({
+      ...prev,
+      baseSalary: employee?.monthlyIncome !== null && employee?.monthlyIncome !== undefined
+        ? String(employee.monthlyIncome)
+        : (employee ? prev.baseSalary : ''),
+    }));
   };
 
   const handleExportWatch = () => {
@@ -300,7 +311,20 @@ export function HRPayrollPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Payroll Record')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => handleChange('employeeID', value)} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => handleChange('employeeID', value)}
+            onEmployeeChange={applyEmployeeDefaults}
+            placeholder={t('Select an employee')}
+            helperText={t('Selecting an employee pulls the current salary and profile details for quick editing.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            language={language}
+            note="Payroll-related defaults were fetched from the employee profile. You can still edit every value before saving."
+          />
           <Input label={t('Pay Period (YYYY-MM)')} value={form.payPeriod} onChange={(e) => handleChange('payPeriod', e.target.value)} placeholder="2026-04" />
           <Input label={t('Base Salary')} type="number" value={form.baseSalary} onChange={(e) => handleChange('baseSalary', e.target.value)} placeholder="15000" />
           <Input label={t('Allowances')} type="number" value={form.allowances} onChange={(e) => handleChange('allowances', e.target.value)} placeholder="0" />

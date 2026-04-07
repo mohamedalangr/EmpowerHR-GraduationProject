@@ -254,6 +254,7 @@ export function EmployeeSelect({
   id,
   value,
   onChange,
+  onEmployeeChange,
   multiple = false,
   placeholder = 'Select an employee',
   helperText,
@@ -293,10 +294,15 @@ export function EmployeeSelect({
 
   const handleChange = (event) => {
     if (multiple) {
-      onChange?.(Array.from(event.target.selectedOptions).map((option) => option.value));
+      const selectedValues = Array.from(event.target.selectedOptions).map((option) => option.value);
+      onChange?.(selectedValues);
+      onEmployeeChange?.(employees.filter((employee) => selectedValues.includes(employee.employeeID)));
       return;
     }
-    onChange?.(event.target.value);
+
+    const nextValue = event.target.value;
+    onChange?.(nextValue);
+    onEmployeeChange?.(employees.find((employee) => employee.employeeID === nextValue) || null);
   };
 
   return (
@@ -334,6 +340,63 @@ export function EmployeeSelect({
         ))}
       </select>
       {helperText ? <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-500)' }}>{helperText}</div> : null}
+    </div>
+  );
+}
+
+export function EmployeeProfileSummary({
+  employee,
+  t = (value) => value,
+  language = 'en',
+  note = 'Employee profile details were fetched for easier entry. You can still edit any field before saving.',
+}) {
+  if (!employee) return null;
+
+  const formatCurrency = (value) => new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  }).format(Number(value || 0));
+
+  const details = [
+    ['Job Title', employee.jobTitle],
+    ['Department', employee.department],
+    ['Team', employee.team],
+    ['Location', employee.location],
+    ['Salary', employee.monthlyIncome !== null && employee.monthlyIncome !== undefined && employee.monthlyIncome !== '' ? formatCurrency(employee.monthlyIncome) : ''],
+    ['Email', employee.email],
+  ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
+
+  return (
+    <div style={{
+      marginBottom: 16,
+      padding: '12px 14px',
+      borderRadius: 14,
+      border: '1px solid #E7EAEE',
+      background: '#F8FAFC',
+    }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 6 }}>
+        {employee.fullName} ({employee.employeeID})
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginBottom: details.length ? 8 : 0 }}>
+        {t(note)}
+      </div>
+      {details.length ? (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {details.map(([label, value]) => (
+            <span key={`${employee.employeeID}-${label}`} style={{
+              padding: '4px 8px',
+              borderRadius: 999,
+              fontSize: 11.5,
+              background: '#fff',
+              border: '1px solid #E7EAEE',
+              color: 'var(--gray-700)',
+            }}>
+              <strong>{t(label)}:</strong> {value}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateShift, hrGetShifts, hrGetShiftWatch } from '../../api/index.js';
-import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -60,6 +60,7 @@ export function HRShiftsPage() {
   const isAdminView = user?.role === 'Admin';
   const [shifts, setShifts] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [watch, setWatch] = useState(EMPTY_WATCH);
@@ -96,6 +97,14 @@ export function HRShiftsPage() {
   }), [shifts, watchSummary]);
 
   const shiftLocations = useMemo(() => [...new Set(shifts.map((shift) => shift.location).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [shifts]);
+
+  const applyEmployeeDefaults = (employee) => {
+    setSelectedEmployee(employee || null);
+    setForm((prev) => ({
+      ...prev,
+      location: employee?.location ? employee.location : (employee ? prev.location : ''),
+    }));
+  };
 
   const handleCreate = async () => {
     if (!form.employeeID.trim() || !form.shiftDate || !form.startTime || !form.endTime) {
@@ -289,7 +298,20 @@ export function HRShiftsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Shift')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))}
+            onEmployeeChange={applyEmployeeDefaults}
+            placeholder={t('Select an employee')}
+            helperText={t('The employee work location is suggested automatically and stays editable for each shift.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            language={language}
+            note="Employee schedule context was fetched from the directory to speed up shift planning."
+          />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Input label={t('Shift Date')} type="date" value={form.shiftDate} onChange={(e) => setForm((prev) => ({ ...prev, shiftDate: e.target.value }))} />
             <div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hrCreateOnboardingPlan, hrGetOnboardingPlans, hrGetOnboardingWatch } from '../../api/index.js';
-import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useLanguage } from '../../context/LanguageContext';
 
 const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-8') => {
@@ -54,6 +54,7 @@ export function HROnboardingPage() {
   const { t, language } = useLanguage();
   const [plans, setPlans] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [watch, setWatch] = useState(EMPTY_WATCH);
@@ -88,6 +89,38 @@ export function HROnboardingPage() {
     followUp: watchSummary.followUpCount ?? 0,
     completed: plans.filter((plan) => plan.status === 'Completed').length,
   }), [plans, watchSummary]);
+
+  const buildSuggestedPlanTitle = (employee, planType = 'Onboarding') => {
+    if (!employee) return '';
+    const roleSuffix = employee.jobTitle ? ` — ${employee.jobTitle}` : '';
+    return `${planType} plan for ${employee.fullName}${roleSuffix}`;
+  };
+
+  const applyEmployeeDefaults = (employee) => {
+    setSelectedEmployee(employee || null);
+    setForm((prev) => {
+      const currentSuggestedTitle = buildSuggestedPlanTitle(selectedEmployee, prev.planType);
+      const nextSuggestedTitle = buildSuggestedPlanTitle(employee, prev.planType);
+      const shouldReplaceTitle = !prev.title.trim() || prev.title === currentSuggestedTitle;
+      return {
+        ...prev,
+        title: shouldReplaceTitle ? nextSuggestedTitle : prev.title,
+      };
+    });
+  };
+
+  const handlePlanTypeChange = (nextType) => {
+    setForm((prev) => {
+      const currentSuggestedTitle = buildSuggestedPlanTitle(selectedEmployee, prev.planType);
+      const nextSuggestedTitle = buildSuggestedPlanTitle(selectedEmployee, nextType);
+      const shouldReplaceTitle = !prev.title.trim() || prev.title === currentSuggestedTitle;
+      return {
+        ...prev,
+        planType: nextType,
+        title: shouldReplaceTitle ? nextSuggestedTitle : prev.title,
+      };
+    });
+  };
 
   const handleExportWatch = () => {
     try {
@@ -267,13 +300,26 @@ export function HROnboardingPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Plan')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))}
+            onEmployeeChange={applyEmployeeDefaults}
+            placeholder={t('Select an employee')}
+            helperText={t('The plan title starts from the selected employee profile and stays editable.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            language={language}
+            note="Employee role and team details were fetched to speed up onboarding and transition planning."
+          />
           <Input label={t('Title')} value={form.title} onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))} placeholder={t('Engineering onboarding')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--gray-500)', marginBottom: 6 }}>{t('Plan Type')}</label>
-              <select value={form.planType} onChange={(e) => setForm((prev) => ({ ...prev, planType: e.target.value }))} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: '1px solid #E5E7EB' }}>
+              <select value={form.planType} onChange={(e) => handlePlanTypeChange(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 12, border: '1px solid #E5E7EB' }}>
                 {['Onboarding', 'Offboarding', 'Transition'].map((item) => <option key={item} value={item}>{t(item)}</option>)}
               </select>
             </div>

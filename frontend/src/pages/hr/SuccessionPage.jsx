@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hrCreateSuccessionPlan, hrGetSuccessionPlans, hrGetSuccessionWatch } from '../../api/index.js';
-import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useLanguage } from '../../context/LanguageContext';
 
 const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-8') => {
@@ -50,6 +50,7 @@ export function HRSuccessionPage() {
   const { t, language } = useLanguage();
   const [plans, setPlans] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [watch, setWatch] = useState(EMPTY_WATCH);
@@ -86,6 +87,16 @@ export function HRSuccessionPage() {
   }), [plans, watchSummary]);
 
   const targetRoles = useMemo(() => [...new Set(plans.map((plan) => plan.targetRole).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [plans]);
+
+  const applyEmployeeDefaults = (employee) => {
+    setSelectedEmployee(employee || null);
+    if (!employee) return;
+
+    setForm((prev) => ({
+      ...prev,
+      targetRole: !prev.targetRole.trim() ? (employee.jobTitle || prev.targetRole) : prev.targetRole,
+    }));
+  };
 
   const handleExportWatch = () => {
     try {
@@ -244,7 +255,20 @@ export function HRSuccessionPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Succession Plan')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))}
+            onEmployeeChange={applyEmployeeDefaults}
+            placeholder={t('Select an employee')}
+            helperText={t('The employee’s current role is suggested as a starting point and remains editable for succession planning.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            language={language}
+            note="Current role, team, and department were fetched from the employee profile for easier succession planning."
+          />
           <DatalistInput label={t('Target Role')} value={form.targetRole} options={targetRoles} onChange={(e) => setForm((prev) => ({ ...prev, targetRole: e.target.value }))} placeholder={t('Select or type a target role')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

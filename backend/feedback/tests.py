@@ -1759,6 +1759,26 @@ class AttendanceLeaveTests(TestCase):
         self.assertEqual(paid_response.status_code, 200)
         self.assertEqual(paid_response.data['status'], 'Paid')
 
+    def test_hr_can_prefill_payroll_from_employee_salary_when_base_salary_is_omitted(self):
+        self.employee.monthlyIncome = 18250
+        self.employee.save(update_fields=['monthlyIncome'])
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            reverse('hr-payroll-list-create'),
+            {
+                'employeeID': self.employee.employeeID,
+                'payPeriod': '2026-05',
+                'allowances': '250.00',
+                'deductions': '50.00',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(str(response.data['baseSalary']), '18250.00')
+        self.assertEqual(str(response.data['netPay']), '18450.00')
+
     def test_hr_payroll_watch_snapshot_returns_processing_follow_up_summary(self):
         second_employee = Employee.objects.create(
             fullName='Lina Payroll',
@@ -2194,6 +2214,28 @@ class AttendanceLeaveTests(TestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(ShiftSchedule.objects.filter(employee=self.employee).count(), 1)
+
+    def test_hr_can_prefill_shift_location_from_employee_profile_when_blank(self):
+        self.employee.location = 'Cairo HQ'
+        self.employee.save(update_fields=['location'])
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            reverse('hr-shift-list-create'),
+            {
+                'employeeID': self.employee.employeeID,
+                'shiftDate': '2026-04-09',
+                'shiftType': 'Morning',
+                'startTime': '09:00',
+                'endTime': '17:00',
+                'status': 'Planned',
+                'notes': 'Auto-filled location from employee directory.',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['location'], 'Cairo HQ')
 
     def test_employee_can_acknowledge_shift_schedule(self):
         shift = ShiftSchedule.objects.create(

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateBenefit, hrGetBenefitWatch, hrGetBenefits } from '../../api/index.js';
-import { Badge, Btn, DatalistInput, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, DatalistInput, EmployeeProfileSummary, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -58,6 +58,7 @@ export function HRBenefitsPage() {
   const isAdminView = user?.role === 'Admin';
   const [benefits, setBenefits] = useState([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [watch, setWatch] = useState(EMPTY_WATCH);
@@ -292,7 +293,20 @@ export function HRBenefitsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Benefit Enrollment')}</h3>
-          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
+          <EmployeeSelect
+            label={t('Employee')}
+            value={form.employeeID}
+            onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))}
+            onEmployeeChange={(employee) => setSelectedEmployee(employee || null)}
+            placeholder={t('Select an employee')}
+            helperText={t('The selected employee profile is shown below so HR can use related details without retyping them.')}
+          />
+          <EmployeeProfileSummary
+            employee={selectedEmployee}
+            t={t}
+            language={language}
+            note="Related employee details are pulled in here for easier benefit setup and can still be changed manually in the form."
+          />
           <DatalistInput label={t('Benefit Name')} value={form.benefitName} options={benefitNames} onChange={(e) => setForm((prev) => ({ ...prev, benefitName: e.target.value }))} placeholder={t('Select or type a benefit name')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

@@ -3968,13 +3968,15 @@ class HRShiftScheduleListCreateView(APIView):
         ).exists():
             return Response({'error': 'A shift for this employee at the same start time already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        location = (serializer.validated_data.get('location') or employee.location or '').strip()
+
         schedule = ShiftSchedule.objects.create(
             employee=employee,
             shiftDate=serializer.validated_data['shiftDate'],
             shiftType=serializer.validated_data.get('shiftType', 'Morning'),
             startTime=serializer.validated_data['startTime'],
             endTime=serializer.validated_data['endTime'],
-            location=serializer.validated_data.get('location', ''),
+            location=location,
             status=serializer.validated_data.get('status', 'Planned'),
             notes=serializer.validated_data.get('notes', ''),
             createdBy=getattr(request.user, 'full_name', '') or getattr(request.user, 'email', ''),
@@ -4334,7 +4336,12 @@ class HRPayrollListCreateView(APIView):
         if PayrollRecord.objects.filter(employee=employee, payPeriod=pay_period).exists():
             return Response({'error': 'Payroll record for this employee and pay period already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        base_salary = serializer.validated_data['baseSalary']
+        base_salary = serializer.validated_data.get('baseSalary')
+        if base_salary is None:
+            if employee.monthlyIncome is None:
+                return Response({'error': 'Base salary is required or missing from the employee profile.'}, status=status.HTTP_400_BAD_REQUEST)
+            base_salary = Decimal(str(employee.monthlyIncome)).quantize(Decimal('0.01'))
+
         allowances = serializer.validated_data.get('allowances', Decimal('0.00'))
         deductions = serializer.validated_data.get('deductions', Decimal('0.00'))
         bonus = serializer.validated_data.get('bonus', Decimal('0.00'))

@@ -140,7 +140,7 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
 class PayrollRecordCreateSerializer(serializers.Serializer):
     employeeID = serializers.CharField(max_length=50)
     payPeriod = serializers.RegexField(regex=r'^\d{4}-\d{2}$', max_length=20)
-    baseSalary = serializers.DecimalField(max_digits=10, decimal_places=2)
+    baseSalary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     allowances = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     deductions = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     bonus = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
