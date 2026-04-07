@@ -78,6 +78,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.email} ({self.role})"
 
+    def save(self, *args, **kwargs):
+        if self.role == self.Role.CANDIDATE:
+            self.employee_id = None
+        elif not self.employee_id:
+            self.employee_id = generate_employee_id()
+        super().save(*args, **kwargs)
+
     @property
     def is_candidate(self):
         return self.role == self.Role.CANDIDATE

@@ -971,7 +971,11 @@ class HREmployeeListCreateView(APIView):
     GET  /api/feedback/hr/employees/        list/search/filter employees
     POST /api/feedback/hr/employees/        create an employee directory record
     """
-    permission_classes = [IsAuthenticated, IsHRManager]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated(), IsTeamLeader()]
+        return [IsAuthenticated(), IsHRManager()]
 
     def get(self, request):
         qs = Employee.objects.filter(isDeleted=False).order_by('fullName', 'employeeID')

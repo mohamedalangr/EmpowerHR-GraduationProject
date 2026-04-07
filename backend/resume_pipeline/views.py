@@ -7,12 +7,15 @@ from difflib import SequenceMatcher
 from datetime import datetime, timezone as dt_timezone
 from pathlib import Path
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView
+from accounts.models import User
 from accounts.permissions import IsHRManager, IsCandidate
+from feedback.models import Employee, EmployeeJobHistory
 from rest_framework.permissions import IsAuthenticated, AllowAny
 import nltk
 from nltk.corpus import stopwords, wordnet
@@ -42,6 +45,112 @@ def _ensure_nltk_resource(resource_path, download_name):
         nltk.data.find(resource_path)
     except LookupError:
         nltk.download(download_name, quiet=True)
+
+
+def _candidate_display_name(submission):
+    name = (submission.candidate_name or '').strip()
+    if name:
+        return name
+
+    email = (submission.candidate_email or '').strip()
+    if email and '@' in email:
+        local_part = email.split('@', 1)[0].replace('.', ' ').replace('_', ' ').strip()
+        if local_part:
+            return ' '.join(part.capitalize() for part in local_part.split())
+
+    return f'Hired Candidate {submission.pk}'
+
+
+def _candidate_contact_email(submission):
+    email = (submission.candidate_email or '').strip().lower()
+    if email:
+        return email
+    tracking = (submission.tracking_code or f'submission{submission.pk}').lower()
+    return f'{tracking}@candidate.empowerhr.local'
+
+
+def _promote_candidate_to_employee(submission, actor):
+    candidate_name = _candidate_display_name(submission)
+    candidate_email = _candidate_contact_email(submission)
+    actor_name = getattr(actor, 'full_name', '') or getattr(actor, 'email', '') or 'HR team'
+
+    user = User.objects.filter(email__iexact=candidate_email).first()
+    previous_role = User.Role.CANDIDATE
+
+    if user:
+        previous_role = user.role or User.Role.CANDIDATE
+        user.full_name = candidate_name or user.full_name
+        user.role = User.Role.TEAM_MEMBER
+        user.is_active = True
+        user.save()
+    else:
+        user = User.objects.create_user(
+            email=candidate_email,
+            password=None,
+            full_name=candidate_name,
+            role=User.Role.TEAM_MEMBER,
+        )
+
+    employee = Employee.objects.filter(email__iexact=candidate_email, isDeleted=False).first()
+    if employee and user.employee_id != employee.employeeID:
+        user.employee_id = employee.employeeID
+        user.save(update_fields=['employee_id'])
+
+    employee_id = user.employee_id
+    previous_job_title = ''
+    previous_employee_role = previous_role
+
+    if employee:
+        previous_job_title = employee.jobTitle or ''
+        previous_employee_role = employee.role or previous_role
+        update_fields = []
+
+        if employee.fullName != candidate_name:
+            employee.fullName = candidate_name
+            update_fields.append('fullName')
+        if employee.jobTitle != submission.job.title:
+            employee.jobTitle = submission.job.title
+            update_fields.append('jobTitle')
+        if employee.role != User.Role.TEAM_MEMBER:
+            employee.role = User.Role.TEAM_MEMBER
+            update_fields.append('role')
+        if employee.employmentStatus != 'Active':
+            employee.employmentStatus = 'Active'
+            update_fields.append('employmentStatus')
+
+        if update_fields:
+            employee.save(update_fields=update_fields)
+    else:
+        employee = Employee.objects.create(
+            employeeID=employee_id,
+            fullName=candidate_name,
+            email=candidate_email,
+            jobTitle=submission.job.title,
+            role=User.Role.TEAM_MEMBER,
+            employmentStatus='Active',
+        )
+
+    EmployeeJobHistory.objects.create(
+        employee=employee,
+        action='Role Change',
+        previousJobTitle=previous_job_title,
+        newJobTitle=employee.jobTitle or submission.job.title,
+        previousRole=previous_employee_role or User.Role.CANDIDATE,
+        newRole=employee.role or User.Role.TEAM_MEMBER,
+        changedBy=actor_name,
+        notes=(
+            f'Candidate hired from recruitment pipeline for {submission.job.title}.'
+            + (f' HR note: {submission.stage_notes.strip()}' if (submission.stage_notes or '').strip() else '')
+        ),
+    )
+
+    return {
+        'employeeID': employee.employeeID,
+        'employeeName': employee.fullName,
+        'employeeEmail': employee.email,
+        'jobTitle': employee.jobTitle,
+        'employmentEvent': 'Candidate converted to employee',
+    }
 
 # CV Ranking Logic
 SKILL_SYNONYMS = {
@@ -1009,9 +1118,14 @@ class SubmissionStageUpdateView(APIView):
             submission.talent_pool = serializer.validated_data['talent_pool']
 
         updated_at = timezone.now()
-        history = list(submission.stage_history or [])
-        history.append(
-            _build_stage_history_entry(
+        linked_employee = None
+
+        with transaction.atomic():
+            if next_stage == Submission.ReviewStage.HIRED and current_stage != Submission.ReviewStage.HIRED:
+                linked_employee = _promote_candidate_to_employee(submission, request.user)
+
+            history = list(submission.stage_history or [])
+            history_entry = _build_stage_history_entry(
                 from_stage=current_stage,
                 to_stage=next_stage,
                 note=submission.stage_notes,
@@ -1020,12 +1134,19 @@ class SubmissionStageUpdateView(APIView):
                 actor_role=getattr(request.user, 'role', '') or 'HRManager',
                 occurred_at=updated_at,
             )
-        )
-        submission.stage_history = history
-        submission.stage_updated_at = updated_at
-        submission.save(update_fields=['review_stage', 'stage_notes', 'talent_pool', 'stage_history', 'stage_updated_at'])
+            if linked_employee:
+                history_entry['employee_id'] = linked_employee['employeeID']
+                history_entry['employment_event'] = linked_employee['employmentEvent']
 
-        return Response(SubmissionSerializer(submission).data)
+            history.append(history_entry)
+            submission.stage_history = history
+            submission.stage_updated_at = updated_at
+            submission.save(update_fields=['review_stage', 'stage_notes', 'talent_pool', 'stage_history', 'stage_updated_at'])
+
+        response_data = SubmissionSerializer(submission).data
+        if linked_employee:
+            response_data['linkedEmployee'] = linked_employee
+        return Response(response_data)
 
 
 class JobCVRankingView(APIView):

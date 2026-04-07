@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateBenefit, hrGetBenefitWatch, hrGetBenefits } from '../../api/index.js';
-import { Badge, Btn, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -288,7 +288,7 @@ export function HRBenefitsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Benefit Enrollment')}</h3>
-          <Input label={t('Employee ID')} value={form.employeeID} onChange={(e) => setForm((prev) => ({ ...prev, employeeID: e.target.value }))} placeholder="EMP0001" />
+          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
           <Input label={t('Benefit Name')} value={form.benefitName} onChange={(e) => setForm((prev) => ({ ...prev, benefitName: e.target.value }))} placeholder={t('Premium Health Plan')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

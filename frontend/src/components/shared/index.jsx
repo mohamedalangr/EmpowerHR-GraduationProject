@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useId } from 'react';
+import { hrGetEmployees } from '../../api/index.js';
 
 // ── SPINNER ──────────────────────────────────────────────────────────────────
 export function Spinner({ size = 36 }) {
@@ -180,6 +181,114 @@ export function Textarea({ label, id, style, onFocus, onBlur, ...props }) {
           e.target.style.boxShadow = '0 1px 2px rgba(17,19,24,.03)';
         }}
       />
+    </div>
+  );
+}
+
+let employeeDirectoryCache = null;
+let employeeDirectoryPromise = null;
+
+const loadEmployeeDirectory = async () => {
+  if (employeeDirectoryCache) return employeeDirectoryCache;
+  if (!employeeDirectoryPromise) {
+    employeeDirectoryPromise = hrGetEmployees()
+      .then((data) => {
+        employeeDirectoryCache = Array.isArray(data) ? data : [];
+        return employeeDirectoryCache;
+      })
+      .catch(() => [])
+      .finally(() => {
+        employeeDirectoryPromise = null;
+      });
+  }
+  return employeeDirectoryPromise;
+};
+
+export function EmployeeSelect({
+  label,
+  id,
+  value,
+  onChange,
+  multiple = false,
+  placeholder = 'Select an employee',
+  helperText,
+  size,
+  style,
+  disabled = false,
+}) {
+  const generatedId = useId();
+  const inputId = id || generatedId;
+  const [employees, setEmployees] = useState(employeeDirectoryCache || []);
+  const [loading, setLoading] = useState(!employeeDirectoryCache);
+
+  useEffect(() => {
+    let active = true;
+
+    loadEmployeeDirectory()
+      .then((data) => {
+        if (active) setEmployees(Array.isArray(data) ? data : []);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const normalizedValue = multiple
+    ? (Array.isArray(value)
+      ? value
+      : String(value || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean))
+    : (value || '');
+
+  const handleChange = (event) => {
+    if (multiple) {
+      onChange?.(Array.from(event.target.selectedOptions).map((option) => option.value));
+      return;
+    }
+    onChange?.(event.target.value);
+  };
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {label && <label htmlFor={inputId} style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{label}</label>}
+      <select
+        id={inputId}
+        aria-label={label || 'Employee selector'}
+        multiple={multiple}
+        size={multiple ? (size || 6) : undefined}
+        value={normalizedValue}
+        onChange={handleChange}
+        disabled={disabled || loading}
+        style={{
+          width: '100%',
+          padding: '12px 16px',
+          background: '#fff',
+          border: '1.5px solid #E7EAEE',
+          borderRadius: 14,
+          fontSize: 14,
+          fontWeight: 500,
+          color: 'var(--gray-900)',
+          outline: 'none',
+          transition: 'all .2s',
+          boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+          minHeight: multiple ? 140 : 'auto',
+          ...style,
+        }}
+      >
+        {!multiple && <option value="">{loading ? 'Loading employees...' : placeholder}</option>}
+        {employees.map((employee) => (
+          <option key={employee.employeeID} value={employee.employeeID}>
+            {employee.fullName} ({employee.employeeID}){employee.department ? ` — ${employee.department}` : ''}
+          </option>
+        ))}
+      </select>
+      {helperText ? <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-500)' }}>{helperText}</div> : null}
     </div>
   );
 }

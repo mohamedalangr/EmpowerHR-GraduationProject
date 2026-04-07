@@ -319,8 +319,12 @@ export function HRCVRankingPage() {
 
     setStageSavingId(submission.id);
     try {
-      await updateSubmissionStage(submission.id, draft);
-      toast('Candidate stage updated', 'success');
+      const result = await updateSubmissionStage(submission.id, draft);
+      if (draft.review_stage === 'Hired' && result?.linkedEmployee?.employeeID) {
+        toast(`Candidate hired and converted to employee ${result.linkedEmployee.employeeID}`, 'success');
+      } else {
+        toast('Candidate stage updated', 'success');
+      }
       await loadSubmissions(selectedJob.id);
     } catch (err) {
       toast(err.message || 'Failed to update stage', 'error');
@@ -1071,6 +1075,11 @@ export function HRCVRankingPage() {
                             <div style={{ fontSize: 11.5, color: 'var(--gray-600)' }}>
                               {t('Updated by')}: {entry.updated_by || t('HR team')}
                             </div>
+                            {entry.employee_id ? (
+                              <div style={{ fontSize: 11.5, color: '#175CD3', marginTop: 4, fontWeight: 700 }}>
+                                {t('Employee ID')}: {entry.employee_id}
+                              </div>
+                            ) : null}
                             {entry.note ? <div style={{ fontSize: 11.5, color: 'var(--gray-700)', marginTop: 4 }}>{entry.note}</div> : null}
                           </div>
                         ))}

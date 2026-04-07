@@ -7,7 +7,7 @@ import {
   getTeamTasks,
   updateTeamTask,
 } from '../../api/index.js';
-import { Badge, Btn, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useLanguage } from '../../context/LanguageContext';
 
 const EMPTY_GOAL_FORM = {
@@ -615,7 +615,7 @@ export function TeamGoalsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20, alignItems: 'start', marginBottom: 20 }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Assign New Goal')}</h3>
-          <Input label={t('Employee ID')} value={goalForm.employeeID} onChange={(e) => setGoalForm((prev) => ({ ...prev, employeeID: e.target.value }))} placeholder="EMP12345" />
+          <EmployeeSelect label={t('Employee')} value={goalForm.employeeID} onChange={(value) => setGoalForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
           <Input label={t('Goal Title')} value={goalForm.title} onChange={(e) => setGoalForm((prev) => ({ ...prev, title: e.target.value }))} placeholder={t('Improve dashboard performance')} />
           <Textarea label={t('Description')} value={goalForm.description} onChange={(e) => setGoalForm((prev) => ({ ...prev, description: e.target.value }))} placeholder={t('Add details or milestones')} />
 
@@ -702,7 +702,7 @@ export function TeamGoalsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Assign New Task')}</h3>
-          <Input label={t('Employee ID')} value={taskForm.employeeID} onChange={(e) => setTaskForm((prev) => ({ ...prev, employeeID: e.target.value }))} placeholder="EMP12345" />
+          <EmployeeSelect label={t('Employee')} value={taskForm.employeeID} onChange={(value) => setTaskForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
           <Input label={t('Task Title')} value={taskForm.title} onChange={(e) => setTaskForm((prev) => ({ ...prev, title: e.target.value }))} placeholder={t('Prepare release checklist')} />
           <Textarea label={t('Description')} value={taskForm.description} onChange={(e) => setTaskForm((prev) => ({ ...prev, description: e.target.value }))} placeholder={t('Describe the work item and deliverables')} />
 

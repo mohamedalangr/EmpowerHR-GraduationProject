@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { hrCreateSuccessionPlan, hrGetSuccessionPlans, hrGetSuccessionWatch } from '../../api/index.js';
-import { Badge, Btn, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useLanguage } from '../../context/LanguageContext';
 
 const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-8') => {
@@ -242,7 +242,7 @@ export function HRSuccessionPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Succession Plan')}</h3>
-          <Input label={t('Employee ID')} value={form.employeeID} onChange={(e) => setForm((prev) => ({ ...prev, employeeID: e.target.value }))} placeholder="EMP12345" />
+          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => setForm((prev) => ({ ...prev, employeeID: value }))} placeholder={t('Select an employee')} />
           <Input label={t('Target Role')} value={form.targetRole} onChange={(e) => setForm((prev) => ({ ...prev, targetRole: e.target.value }))} placeholder={t('Senior Developer')} />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

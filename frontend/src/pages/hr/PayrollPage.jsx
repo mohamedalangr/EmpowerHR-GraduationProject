@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreatePayroll, hrGetPayroll, hrGetPayrollWatch, hrMarkPayrollPaid } from '../../api/index.js';
-import { Badge, Btn, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -300,7 +300,7 @@ export function HRPayrollPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>{t('Create Payroll Record')}</h3>
-          <Input label={t('Employee ID')} value={form.employeeID} onChange={(e) => handleChange('employeeID', e.target.value)} placeholder="EMP12345" />
+          <EmployeeSelect label={t('Employee')} value={form.employeeID} onChange={(value) => handleChange('employeeID', value)} placeholder={t('Select an employee')} />
           <Input label={t('Pay Period (YYYY-MM)')} value={form.payPeriod} onChange={(e) => handleChange('payPeriod', e.target.value)} placeholder="2026-04" />
           <Input label={t('Base Salary')} type="number" value={form.baseSalary} onChange={(e) => handleChange('baseSalary', e.target.value)} placeholder="15000" />
           <Input label={t('Allowances')} type="number" value={form.allowances} onChange={(e) => handleChange('allowances', e.target.value)} placeholder="0" />

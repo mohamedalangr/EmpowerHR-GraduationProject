@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hrCreateTraining, hrGetTraining, hrGetTrainingCompliance } from '../../api/index.js';
-import { Badge, Btn, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, EmployeeSelect, Input, Spinner, Textarea, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -10,7 +10,7 @@ const INITIAL_FORM = {
   description: '',
   category: 'Technical',
   durationHours: 1,
-  assignedEmployeeIDs: '',
+  assignedEmployeeIDs: [],
   dueDate: '',
 };
 
@@ -68,10 +68,12 @@ export function HRTrainingPage() {
 
     setSubmitting(true);
     try {
-      const employeeIDs = form.assignedEmployeeIDs
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
+      const employeeIDs = Array.isArray(form.assignedEmployeeIDs)
+        ? form.assignedEmployeeIDs.filter(Boolean)
+        : String(form.assignedEmployeeIDs || '')
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
 
       await hrCreateTraining({
         title: form.title.trim(),
@@ -266,7 +268,14 @@ export function HRTrainingPage() {
             <Input label={t('Duration (hours)')} type="number" min="1" value={form.durationHours} onChange={(e) => setForm((prev) => ({ ...prev, durationHours: e.target.value }))} />
           </div>
 
-          <Input label={t('Assigned Employee IDs')} value={form.assignedEmployeeIDs} onChange={(e) => setForm((prev) => ({ ...prev, assignedEmployeeIDs: e.target.value }))} placeholder="EMP12345, EMP12000" />
+          <EmployeeSelect
+            label={t('Assigned Employees')}
+            value={form.assignedEmployeeIDs}
+            onChange={(value) => setForm((prev) => ({ ...prev, assignedEmployeeIDs: value }))}
+            placeholder={t('Select employees')}
+            multiple
+            helperText={t('Hold Ctrl or Cmd to select more than one employee.')}
+          />
           <Input label={t('Due Date')} type="date" value={form.dueDate} onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))} />
 
           <Btn onClick={handleCreate} disabled={submitting} style={{ width: '100%' }}>

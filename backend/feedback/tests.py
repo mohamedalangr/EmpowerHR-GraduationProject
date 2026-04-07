@@ -229,6 +229,53 @@ class RecruitmentPublicFlowTests(TestCase):
         self.assertEqual(last_event['updated_by'], 'Recruitment HR')
         self.assertEqual(response.data['stage_history'][-1]['to_stage'], 'Shortlisted')
 
+    def test_hiring_candidate_creates_employee_profile_and_history(self):
+        candidate_user = User.objects.create_user(
+            email='hire.me@test.com',
+            password='TestPass123!',
+            full_name='Hire Me',
+            role='Candidate',
+        )
+        submission = Submission.objects.create(
+            job=self.job,
+            candidate_name='Hire Me',
+            candidate_email='hire.me@test.com',
+            resume_file=SimpleUploadedFile('hireme.txt', b'React testing and teamwork profile', content_type='text/plain'),
+            review_stage='Interview',
+            stage_notes='Final interview complete.',
+            talent_pool=False,
+            status=Submission.Status.DONE,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.post(
+            reverse('recruitment-submission-stage', kwargs={'pk': submission.pk}),
+            {
+                'review_stage': 'Hired',
+                'stage_notes': 'Approved for onboarding.',
+                'talent_pool': False,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        submission.refresh_from_db()
+        candidate_user.refresh_from_db()
+
+        self.assertEqual(submission.review_stage, 'Hired')
+        self.assertEqual(candidate_user.role, 'TeamMember')
+        self.assertTrue(candidate_user.employee_id)
+
+        employee = Employee.objects.get(email='hire.me@test.com')
+        self.assertEqual(employee.employeeID, candidate_user.employee_id)
+        self.assertEqual(employee.fullName, 'Hire Me')
+        self.assertEqual(employee.jobTitle, 'Frontend Engineer')
+
+        history_entry = EmployeeJobHistory.objects.filter(employee=employee).latest('changedAt')
+        self.assertEqual(history_entry.previousRole, 'Candidate')
+        self.assertEqual(history_entry.newRole, 'TeamMember')
+        self.assertIn('Candidate hired from recruitment pipeline', history_entry.notes)
+
     def test_hr_cannot_skip_hiring_stages_or_reject_without_reason(self):
         submission = Submission.objects.create(
             job=self.job,
@@ -374,9 +421,18 @@ class FeedbackHRViewsTests(TestCase):
             role='TeamMember',
             employee_id='EMP99889',
         )
+        self.leader_user = User.objects.create_user(
+            email='leader.local@test.com',
+            password='TestPass123!',
+            full_name='Leader Local',
+            role='TeamLeader',
+            employee_id='EMP99890',
+        )
         self.client.force_authenticate(user=self.hr_user)
         self.member_client = APIClient()
         self.member_client.force_authenticate(user=self.member_user)
+        self.leader_client = APIClient()
+        self.leader_client.force_authenticate(user=self.leader_user)
 
         self.employee = Employee.objects.create(
             fullName='Mona Ali',
@@ -440,6 +496,12 @@ class FeedbackHRViewsTests(TestCase):
                 fieldType='score_1_4',
             ).exists()
         )
+
+    def test_team_leader_can_list_employees_for_dropdowns(self):
+        response = self.leader_client.get(reverse('hr-employee-list-create'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(item['employeeID'] == self.employee.employeeID for item in response.data))
 
     def test_hr_submissions_endpoint_supports_search_and_status_filters(self):
         second_employee = Employee.objects.create(
