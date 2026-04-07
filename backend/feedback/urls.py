@@ -104,15 +104,15 @@ urlpatterns = [
     # DELETE /api/feedback/hr/forms/<id>/           delete form
     path('hr/forms/<str:form_id>/', HRFormDetailView.as_view(), name='hr-form-detail'),
 
-    # POST /api/feedback/hr/forms/<id>/activate/    activate form
-    # POST /api/feedback/hr/forms/<id>/deactivate/  deactivate form
-    path('hr/forms/<str:form_id>/<str:action>/',
-         HRFormActivateView.as_view(), name='hr-form-activate'),
-
     # GET  /api/feedback/hr/forms/<id>/questions/   list questions
     # POST /api/feedback/hr/forms/<id>/questions/   add question
     path('hr/forms/<str:form_id>/questions/',
          HRQuestionListCreateView.as_view(), name='hr-question-list-create'),
+
+    # POST /api/feedback/hr/forms/<id>/activate/    activate form
+    # POST /api/feedback/hr/forms/<id>/deactivate/  deactivate form
+    path('hr/forms/<str:form_id>/<str:action>/',
+         HRFormActivateView.as_view(), name='hr-form-activate'),
 
     # PUT    /api/feedback/hr/questions/<id>/        update question
     # DELETE /api/feedback/hr/questions/<id>/        delete question

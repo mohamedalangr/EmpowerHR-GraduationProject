@@ -420,6 +420,27 @@ class FeedbackHRViewsTests(TestCase):
         self.assertEqual(add_question_response.status_code, 403)
         self.assertEqual(activate_response.status_code, 403)
 
+    def test_hr_can_add_question_to_form(self):
+        response = self.client.post(
+            reverse('hr-question-list-create', kwargs={'form_id': self.form.formID}),
+            {
+                'questionText': 'How supported do you feel at work?',
+                'fieldType': 'score_1_4',
+                'order': 1,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['questionText'], 'How supported do you feel at work?')
+        self.assertTrue(
+            FeedbackQuestion.objects.filter(
+                formID=self.form,
+                questionText='How supported do you feel at work?',
+                fieldType='score_1_4',
+            ).exists()
+        )
+
     def test_hr_submissions_endpoint_supports_search_and_status_filters(self):
         second_employee = Employee.objects.create(
             fullName='Sara Hassan',
