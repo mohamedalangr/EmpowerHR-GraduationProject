@@ -2,14 +2,15 @@ from django.db import migrations
 
 
 def sync_employee_schema(apps, schema_editor):
-    cursor = schema_editor.connection.cursor()
-    cursor.execute("PRAGMA table_info(feedback_employee)")
-    existing_columns = {row[1] for row in cursor.fetchall()}
+    """
+    Legacy no-op.
 
-    if 'companySize' not in existing_columns:
-        schema_editor.execute("ALTER TABLE feedback_employee ADD COLUMN companySize integer NULL")
-    if 'companyTenure' not in existing_columns:
-        schema_editor.execute("ALTER TABLE feedback_employee ADD COLUMN companyTenure integer NULL")
+    These columns are now added properly by a later schema migration
+    (`0022_employee_companysize_employee_companytenure`).
+    Keeping this migration as a no-op prevents fresh Railway/Postgres
+    deployments from failing on SQLite-specific SQL or duplicate columns.
+    """
+    return
 
 
 class Migration(migrations.Migration):
