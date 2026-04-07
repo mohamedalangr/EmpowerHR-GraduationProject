@@ -89,6 +89,33 @@ export function HRTicketsPage() {
     followUp: watchSummary.followUpCount ?? 0,
   }), [tickets, watchSummary]);
 
+  const ticketPulseCards = useMemo(() => ([
+    {
+      label: t('Active Cases'),
+      value: stats.active,
+      note: t('Helpdesk issues still moving through assignment, diagnosis, or resolution.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Critical Alerts'),
+      value: stats.critical,
+      note: t('High-priority employee requests that may require faster escalation.'),
+      accent: '#DC2626',
+    },
+    {
+      label: t('Support Categories'),
+      value: categoryBreakdown.length,
+      note: t('Issue categories represented across the current helpdesk queue.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Resolution Watch'),
+      value: followUpItems.length,
+      note: t('Cases still needing ownership, updates, or final closure steps.'),
+      accent: '#7C3AED',
+    },
+  ]), [categoryBreakdown.length, followUpItems.length, stats.active, stats.critical, t]);
+
   const handleExportWatch = () => {
     try {
       const rows = [
@@ -194,6 +221,16 @@ export function HRTicketsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {ticketPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Tickets', value: stats.total, accent: '#111827' },
@@ -223,16 +260,21 @@ export function HRTicketsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item) => (
-                <div key={item.ticketID} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={item.ticketID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Support follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.subject} · {t(item.category)} · {t(item.priority)}</div>
                     </div>
                     <Badge label={t(item.followUpState || item.status)} color={WATCH_COLORS[item.followUpState] || STATUS_COLORS[item.status] || 'gray'} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <Badge label={t(item.category)} color="accent" />
+                    <Badge label={t(item.priority)} color={item.priority === 'Critical' ? 'red' : item.priority === 'High' ? 'orange' : 'gray'} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                     {item.ageDays ?? 0} {t('days since last update')}
                   </div>
                 </div>

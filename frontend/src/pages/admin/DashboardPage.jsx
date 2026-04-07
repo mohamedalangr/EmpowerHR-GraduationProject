@@ -103,6 +103,27 @@ export function AdminDashboardPage() {
     t('Keep route ownership aligned'),
   ];
 
+  const adminPulseCards = useMemo(() => ([
+    {
+      label: t('Access Coverage'),
+      value: Object.keys(roleCounts).length,
+      note: `${roleCounts.Admin || 0} ${t('admins')} · ${roleCounts.TeamLeader || 0} ${t('leaders')}`,
+      accent: '#2563EB',
+    },
+    {
+      label: t('Queue Pressure'),
+      value: queueCount,
+      note: t('Leave, expense, document, and support items still in motion.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Hiring Activity'),
+      value: jobs.filter((job) => job?.is_active !== false).length,
+      note: `${forms.filter((item) => item?.isActive).length} ${t('active forms')} · ${employees.length} ${t('people tracked')}`,
+      accent: '#7C3AED',
+    },
+  ]), [employees.length, forms, jobs, queueCount, roleCounts, t]);
+
   return (
     <div className="hr-page-shell">
       <div className="hr-page-header is-split">
@@ -152,6 +173,16 @@ export function AdminDashboardPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {adminPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="hr-stats-grid" style={{ marginBottom: 24 }}>
         {[
           { label: t('Managed People'), value: employees.length, accent: '#111827' },
@@ -171,10 +202,15 @@ export function AdminDashboardPage() {
           <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Access & Governance Board')}</div>
           <div style={{ display: 'grid', gap: 12 }}>
             {governanceCards.map((card) => (
-              <div key={card.title} style={{ border: '1px solid #E5E7EB', borderRadius: 16, padding: '14px 16px', background: '#fff' }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: card.accent }}>{card.title}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginTop: 6 }}>{card.mission}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 6 }}>{card.shared}</div>
+              <div key={card.title} className="workspace-action-card">
+                <div className="workspace-action-card-head">
+                  <div>
+                    <div className="workspace-action-eyebrow">{t('Workspace lane')}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: card.accent }}>{card.title}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginTop: 6 }}>{card.mission}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 6 }}>{card.shared}</div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

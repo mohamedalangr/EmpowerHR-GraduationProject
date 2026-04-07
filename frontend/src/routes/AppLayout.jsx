@@ -141,6 +141,29 @@ const ROLE_ROUTE_PREFIXES = {
   Admin: ['/admin/'],
 };
 
+const ROLE_WORKSPACE_COPY = {
+  Candidate: {
+    eyebrow: 'Candidate journey',
+    summary: 'Discover open roles, follow your progress, and keep every next step clear and inviting.',
+  },
+  TeamMember: {
+    eyebrow: 'Employee workspace',
+    summary: 'Keep daily work, requests, and growth tools organized in one focused place.',
+  },
+  TeamLeader: {
+    eyebrow: 'Leadership hub',
+    summary: 'Guide team priorities, coach progress, and move faster between the actions that matter most.',
+  },
+  HRManager: {
+    eyebrow: 'HR operations',
+    summary: 'Review people workflows with cleaner sections, faster navigation, and better visual clarity.',
+  },
+  Admin: {
+    eyebrow: 'Admin control center',
+    summary: 'Oversee governance, approvals, and cross-team activity from a sharper command-style workspace.',
+  },
+};
+
 const FOCUS_MODE_STORAGE_KEY = 'empowerhr-focus-mode';
 const COMPACT_MODE_STORAGE_KEY = 'empowerhr-compact-mode';
 
@@ -204,6 +227,18 @@ export function AppLayout() {
     }
     return 'Ctrl K';
   }, []);
+
+  const workspaceCopy = useMemo(
+    () => ROLE_WORKSPACE_COPY[user?.role] || ROLE_WORKSPACE_COPY.TeamMember,
+    [user?.role],
+  );
+
+  const workspaceHighlights = useMemo(() => ([
+    user?.role ? t(`role.${user.role}`) : sectionLabel,
+    sectionLabel,
+    isCompactMode ? t('layout.compactView') : t('layout.comfortView'),
+    isFocusMode ? t('layout.focusMode') : t('layout.quickActions'),
+  ]), [isCompactMode, isFocusMode, sectionLabel, t, user?.role]);
 
   const handleOpenHome = () => {
     if (!user?.role) return;
@@ -324,7 +359,14 @@ export function AppLayout() {
             <div className="app-topbar-breadcrumb">
               {t('layout.home')} / {sectionLabel} / {currentPageLabel}
             </div>
+            <div className="app-topbar-eyebrow">{workspaceCopy.eyebrow}</div>
             <h1 className="app-topbar-title">{currentPageLabel}</h1>
+            <p className="app-topbar-subtitle">{workspaceCopy.summary}</p>
+            <div className="app-topbar-pills">
+              {workspaceHighlights.map((item, index) => (
+                <span key={`${item}-${index}`} className="app-topbar-pill">{item}</span>
+              ))}
+            </div>
           </div>
 
           <div className="app-topbar-actions">

@@ -166,6 +166,27 @@ export function EmployeeDashboardPage() {
     },
   ];
 
+  const workspaceRhythmCards = useMemo(() => ([
+    {
+      label: t('Today Status'),
+      value: t(todayAttendance?.status || 'Not started'),
+      note: t('Keep attendance and leave visibility in one glance.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Tasks & Goals'),
+      value: openTasks.length + activeGoals.length,
+      note: t('Your execution and growth items currently in motion.'),
+      accent: '#7C3AED',
+    },
+    {
+      label: t('Service Follow-Up'),
+      value: pendingDocuments.length + openTickets.length + pendingLeaves.length,
+      note: t('Requests waiting on updates across support, documents, and leave.'),
+      accent: '#0F766E',
+    },
+  ]), [activeGoals.length, openTasks.length, openTickets.length, pendingDocuments.length, pendingLeaves.length, t, todayAttendance?.status]);
+
   return (
     <div className="hr-page-shell">
       <div className="hr-page-header is-split">
@@ -212,6 +233,16 @@ export function EmployeeDashboardPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {workspaceRhythmCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="hr-stats-grid" style={{ marginBottom: 24 }}>
         {[
           { label: t('Today'), value: t(todayAttendance?.status || 'Not started'), accent: '#E8321A' },
@@ -231,13 +262,14 @@ export function EmployeeDashboardPage() {
           <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Quick Actions')}</div>
           <div style={{ display: 'grid', gap: 12 }}>
             {workspaceCards.map((card) => (
-              <div key={card.title} style={{ border: '1px solid #E5E7EB', borderRadius: 16, padding: '14px 16px', background: '#fff' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+              <div key={card.title} className="workspace-action-card">
+                <div className="workspace-action-card-head">
                   <div>
+                    <div className="workspace-action-eyebrow">{t('Quick route')}</div>
                     <div style={{ fontWeight: 700, fontSize: 14 }}>{card.title}</div>
                     <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{card.description}</div>
                   </div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: card.accent }}>{card.count}</div>
+                  <div className="workspace-action-value" style={{ color: card.accent }}>{card.count}</div>
                 </div>
                 <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
                   <Btn size="sm" variant="outline" onClick={() => navigate(card.path)}>{t('Go to workspace')}</Btn>

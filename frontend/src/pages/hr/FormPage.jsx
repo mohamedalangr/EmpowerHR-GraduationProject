@@ -115,6 +115,32 @@ export function HRFormsPage() {
   const totalSubmissions = forms.reduce((sum, form) => sum + Number(form.submissionCount || 0), 0);
   const avgQuestions = forms.length ? Math.round(totalQuestions / forms.length) : 0;
   const responseSummary = responseSnapshot?.summary || {};
+  const formPulseCards = useMemo(() => ([
+    {
+      label: t('Live Forms'),
+      value: activeCount,
+      note: t('Surveys currently open for response collection.'),
+      accent: '#22C55E',
+    },
+    {
+      label: t('Pending Responses'),
+      value: responseSummary.pendingResponses ?? 0,
+      note: t('Outstanding responses still needed from employees.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Coverage Watch'),
+      value: responseSummary.lowCoverageForms ?? draftCount,
+      note: t('Forms that may need reminders or follow-up.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Average Completion'),
+      value: `${responseSummary.averageCompletionRate ?? 0}%`,
+      note: t('Current health of form participation across the library.'),
+      accent: '#2563EB',
+    },
+  ]), [activeCount, draftCount, responseSummary.averageCompletionRate, responseSummary.lowCoverageForms, responseSummary.pendingResponses, t]);
 
   const handleExportForms = () => {
     const rows = [
@@ -319,6 +345,16 @@ export function HRFormsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 22 }}>
+        {formPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="hr-stats-grid" style={{ marginBottom: 22 }}>
         {[
           { label: 'Total Forms', value: forms.length, color: 'var(--gray-900)' },
@@ -388,7 +424,8 @@ export function HRFormsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {(responseSnapshot?.followUpItems || []).map((item) => (
-                <div key={item.formID} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
+                <div key={item.formID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Response watch')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
                     <Badge label={t(item.riskLevel)} color={item.riskLevel === 'High' ? 'red' : 'orange'} />

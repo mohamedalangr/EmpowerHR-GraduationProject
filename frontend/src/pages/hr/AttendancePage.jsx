@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   hrGetAttendanceRecords,
   hrGetAttendanceWatch,
@@ -6,6 +7,7 @@ import {
   hrReviewLeaveRequest,
 } from '../../api/index.js';
 import { Spinner, Btn, Badge, useToast } from '../../components/shared/index.jsx';
+import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
 const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-8') => {
@@ -35,6 +37,9 @@ const EMPTY_WATCH = {
 export function HRAttendancePage() {
   const toast = useToast();
   const { t } = useLanguage();
+  const { user, resolvePath } = useAuth();
+  const navigate = useNavigate();
+  const isAdminView = user?.role === 'Admin';
   const [attendance, setAttendance] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +82,33 @@ export function HRAttendancePage() {
       followUp: watchSummary.followUpCount ?? 0,
     };
   }, [attendance, leaveRequests, watchSummary]);
+
+  const attendancePulseCards = useMemo(() => ([
+    {
+      label: t('Attendance Flow'),
+      value: stats.attendanceToday,
+      note: t('Daily logs already captured across the workforce today.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Leave Queue'),
+      value: stats.pending,
+      note: t('Pending leave decisions that still need HR review or approval.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Department Signals'),
+      value: departmentBreakdown.length,
+      note: t('Teams represented in the attendance and leave monitoring snapshot.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Follow-Up Watch'),
+      value: followUpItems.length,
+      note: t('Open shifts, partial days, or leave cases that still need attention.'),
+      accent: '#7C3AED',
+    },
+  ]), [departmentBreakdown.length, followUpItems.length, stats.attendanceToday, stats.pending, t]);
 
   const handleReview = async (leaveRequestID, status) => {
     setReviewingId(leaveRequestID);
@@ -157,6 +189,51 @@ export function HRAttendancePage() {
         <Btn variant="outline" onClick={handleExportWatch}>{t('Export Watch CSV')}</Btn>
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 18, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>
+              {t(isAdminView ? 'Admin Control Center' : 'HR Operations')}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>
+              {t(isAdminView
+                ? 'Oversee users, access coverage, and operational readiness across the platform.'
+                : 'People operations, compliance, and service delivery.')}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/dashboard'))}>{t('nav.dashboard')}</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/shifts'))}>{t('nav.shifts')}</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/payroll'))}>{t('nav.payroll')}</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/tickets'))}>{t('nav.supportTickets')}</Btn>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+          {[
+            { label: t('Attendance Logged Today'), value: stats.attendanceToday, color: '#E8321A' },
+            { label: t('Pending Leave Requests'), value: stats.pending, color: '#F59E0B' },
+            { label: t('Approved Leave Requests'), value: stats.approved, color: '#10B981' },
+            { label: t('Needs Follow-Up'), value: stats.followUp, color: '#111827' },
+          ].map((card) => (
+            <div key={card.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', marginBottom: 6 }}>{card.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: card.color }}>{card.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {attendancePulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Attendance Logged Today', value: stats.attendanceToday, accent: '#E8321A' },
@@ -186,15 +263,20 @@ export function HRAttendancePage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item, index) => (
-                <div key={`${item.type}-${item.attendanceID || item.leaveRequestID || index}`} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={`${item.type}-${item.attendanceID || item.leaveRequestID || index}`} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Attendance follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.department} · {item.date || '—'}</div>
                     </div>
                     <Badge label={t(item.followUpState || item.status)} color={WATCH_COLORS[item.followUpState] || getStatusColor(item.status)} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    {item.type && <Badge label={t(item.type)} color="accent" />}
+                    {item.status && <Badge label={t(item.status)} color={getStatusColor(item.status)} />}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{item.summary}</div>
                 </div>
               ))}
             </div>

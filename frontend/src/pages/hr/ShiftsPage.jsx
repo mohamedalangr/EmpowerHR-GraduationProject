@@ -96,6 +96,33 @@ export function HRShiftsPage() {
     completed: watchSummary.completedCount ?? shifts.filter((shift) => shift.status === 'Completed').length,
   }), [shifts, watchSummary]);
 
+  const shiftPulseCards = useMemo(() => ([
+    {
+      label: t('Coverage Queue'),
+      value: stats.pendingConfirmations,
+      note: t('Upcoming shifts still waiting on employee confirmation or final assignment.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Risk Flags'),
+      value: stats.coverageRisks,
+      note: t('Schedules that may create staffing gaps or need backup coverage.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Shift Mix'),
+      value: shiftTypeBreakdown.length,
+      note: t('Shift patterns currently represented across locations and teams.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Closeout Watch'),
+      value: followUpItems.length,
+      note: t('Shifts still needing confirmations, swaps, or end-of-day follow-up.'),
+      accent: '#7C3AED',
+    },
+  ]), [followUpItems.length, shiftTypeBreakdown.length, stats.coverageRisks, stats.pendingConfirmations, t]);
+
   const shiftLocations = useMemo(() => [...new Set(shifts.map((shift) => shift.location).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [shifts]);
 
   const applyEmployeeDefaults = (employee) => {
@@ -226,6 +253,16 @@ export function HRShiftsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {shiftPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Total Shifts', value: stats.total, accent: '#111827' },
@@ -255,16 +292,21 @@ export function HRShiftsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item) => (
-                <div key={item.scheduleID} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={item.scheduleID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Shift follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.shiftDate} · {t(item.shiftType)} · {item.location || '—'}</div>
                     </div>
                     <Badge label={t(item.followUpState || item.status)} color={WATCH_COLORS[item.followUpState] || STATUS_COLORS[item.status] || 'gray'} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <Badge label={t(item.shiftType)} color="accent" />
+                    <Badge label={item.location || t('Location TBD')} color="gray" />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                     {(item.daysToShift ?? 0) >= 0 ? `${item.daysToShift ?? 0} ${t('days pending')}` : t('overdue')}
                   </div>
                 </div>

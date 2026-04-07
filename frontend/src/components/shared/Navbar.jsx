@@ -26,6 +26,29 @@ import {
 } from '../../api/index.js';
 import { Btn, Spinner } from './index.jsx';
 
+const ROLE_WORKSPACE_SUMMARY = {
+  Candidate: {
+    label: 'Explore & apply',
+    message: 'Stay inspired with saved pages, timely alerts, and a smoother path through each hiring step.',
+  },
+  TeamMember: {
+    label: 'Own your day',
+    message: 'Move through work, growth, and requests with a calmer layout and clearer shortcuts.',
+  },
+  TeamLeader: {
+    label: 'Lead with clarity',
+    message: 'Keep coaching, team priorities, and follow-ups visible without losing focus.',
+  },
+  HRManager: {
+    label: 'Run operations smoothly',
+    message: 'Keep approvals, service queues, and hiring flows organized from one polished sidebar.',
+  },
+  Admin: {
+    label: 'See the big picture',
+    message: 'Monitor governance, access, and people operations from a cleaner command surface.',
+  },
+};
+
 const NAV_GROUPS = {
   TeamMember: [
     { titleKey: 'nav.overview', items: [{ path: '/employee/dashboard', labelKey: 'nav.dashboard' }] },
@@ -1163,6 +1186,12 @@ export function Navbar() {
   }, [pageSearchEntries, searchData, searchQuery]);
 
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
+  const workspaceSummary = ROLE_WORKSPACE_SUMMARY[user?.role] || ROLE_WORKSPACE_SUMMARY.TeamMember;
+  const workspaceStats = [
+    { label: 'Sections', value: groups.length },
+    { label: 'Pinned', value: favoriteLinks.length },
+    { label: 'Alerts', value: unreadCount },
+  ];
 
   const markAllAsRead = useCallback(() => {
     if (!user) return;
@@ -1241,6 +1270,19 @@ export function Navbar() {
 
         <div className="app-sidebar-note">
           {t('sidebar.note')}
+        </div>
+
+        <div className="app-sidebar-spotlight">
+          <div className="app-sidebar-spotlight-label">{workspaceSummary.label}</div>
+          <div className="app-sidebar-spotlight-copy">{workspaceSummary.message}</div>
+          <div className="app-sidebar-spotlight-stats">
+            {workspaceStats.map((item) => (
+              <span key={item.label} className="app-sidebar-spotlight-pill">
+                <strong>{item.value}</strong>
+                {item.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="app-sidebar-groups">
@@ -1412,8 +1454,13 @@ export function Navbar() {
         </div>
 
         <div className="app-sidebar-usercard">
-          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}>{user.full_name}</div>
-          <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 10 }}>{roleLabel}</div>
+          <div className="app-usercard-header">
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}>{user.full_name}</div>
+              <div className="app-usercard-meta">{user.email || user.employee_id || 'Ready for today’s flow.'}</div>
+            </div>
+            <span className="app-usercard-role">{roleLabel}</span>
+          </div>
 
           <button type="button" className="app-notification-trigger" onClick={handleTogglePlanner}>
             <span className="app-notification-trigger-copy">

@@ -416,12 +416,16 @@ export function Badge({ label, color }) {
   const c = colors[color] || colors.gray;
   return (
     <span style={{
-      padding: '4px 10px', borderRadius: 20,
-      fontSize: 11, fontWeight: 700,
-      background: c.bg, color: c.text,
+      padding: '4px 10px',
+      borderRadius: 999,
+      fontSize: 11,
+      fontWeight: 700,
+      background: c.bg,
+      color: c.text,
       display: 'inline-block',
       border: '1px solid rgba(17,19,24,.05)',
       letterSpacing: '.01em',
+      boxShadow: '0 1px 2px rgba(17,19,24,.04)',
     }}>{label}</span>
   );
 }
@@ -429,30 +433,70 @@ export function Badge({ label, color }) {
 // ── BUTTON ───────────────────────────────────────────────────────────────────
 export function Btn({ children, variant = 'primary', size = 'md', ...props }) {
   const base = {
-    border: '1px solid transparent', borderRadius: 14, fontWeight: 700,
-    cursor: props.disabled ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center',
-    justifyContent: 'center', gap: 7, transition: 'all .15s',
+    border: '1px solid transparent',
+    borderRadius: 14,
+    fontWeight: 700,
+    cursor: props.disabled ? 'not-allowed' : 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    transition: 'transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease',
     fontSize: size === 'sm' ? 12 : 14,
     padding: size === 'sm' ? '7px 14px' : '11px 22px',
     opacity: props.disabled ? 0.65 : 1,
   };
   const variants = {
-    primary: { background: 'var(--red)', color: '#fff', boxShadow: 'var(--shadow-red)' },
-    ghost:   { background: '#F8FAFC', color: 'var(--gray-700)', border: '1px solid #E7EAEE' },
-    danger:  { background: '#FFF5F3', color: 'var(--red)', border: '1px solid #FAD7D1' },
-    accent:  { background: 'var(--accent-light)', color: '#8B4A42', border: '1px solid #EED3CE' },
-    outline: { background: '#fff', color: 'var(--red)', border: '1px solid #F2B6AA' },
+    primary: {
+      background: 'linear-gradient(135deg, #E8321A 0%, #D92D17 100%)',
+      color: '#fff',
+      boxShadow: '0 10px 24px rgba(232,50,26,.18)',
+    },
+    ghost: {
+      background: '#F8FAFC',
+      color: 'var(--gray-700)',
+      border: '1px solid #E7EAEE',
+      boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+    },
+    danger: {
+      background: '#FFF5F3',
+      color: 'var(--red)',
+      border: '1px solid #FAD7D1',
+      boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+    },
+    accent: {
+      background: 'linear-gradient(135deg, #F9EDEB 0%, #FFF7F5 100%)',
+      color: '#8B4A42',
+      border: '1px solid #EED3CE',
+      boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+    },
+    outline: {
+      background: '#fff',
+      color: 'var(--red)',
+      border: '1px solid #F2B6AA',
+      boxShadow: '0 1px 2px rgba(17,19,24,.03)',
+    },
   };
+  const visualStyle = variants[variant] || variants.primary;
+
   return (
-    <button {...props} style={{ ...base, ...variants[variant], ...props.style }}
-      onMouseEnter={e => {
+    <button
+      {...props}
+      style={{ ...base, ...visualStyle, ...props.style }}
+      onMouseEnter={(e) => {
         if (props.disabled) return;
         e.currentTarget.style.transform = 'translateY(-1px)';
-        if (variant === 'primary') e.currentTarget.style.background = '#d02a14';
+        e.currentTarget.style.boxShadow = variant === 'primary'
+          ? '0 14px 28px rgba(232,50,26,.22)'
+          : '0 10px 22px rgba(17,19,24,.07)';
+        if (variant === 'primary') e.currentTarget.style.background = 'linear-gradient(135deg, #DA331C 0%, #C92713 100%)';
+        if (variant === 'ghost' || variant === 'outline') e.currentTarget.style.borderColor = '#F2C8C0';
       }}
-      onMouseLeave={e => {
+      onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        if (variant === 'primary') e.currentTarget.style.background = 'var(--red)';
+        e.currentTarget.style.boxShadow = visualStyle.boxShadow || 'none';
+        e.currentTarget.style.background = visualStyle.background || '#fff';
+        e.currentTarget.style.borderColor = visualStyle.border?.match(/#(?:[0-9a-fA-F]{3}){1,2}/)?.[0] || 'transparent';
       }}
     >
       {children}

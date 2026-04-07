@@ -3,13 +3,35 @@ import { Btn } from '../../components/shared/index.jsx';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmployeeCareersPage } from './CareersPage';
 
+const CANDIDATE_MODE_CONTENT = {
+  dashboard: {
+    chips: ['Browse Roles', 'Role Match Radar', 'Interview Readiness'],
+    spotlightTitle: 'Candidate Route Highlights',
+    spotlightNote: 'Explore roles like a guided trip, compare what fits quickly, and keep your next steps easy to spot.',
+    highlights: [
+      { label: 'Role Feed', value: 'Fresh', note: 'Discover open positions in a cleaner and more inviting browse flow.' },
+      { label: 'Apply Flow', value: 'Easy', note: 'Move from curiosity to application with fewer distractions.' },
+      { label: 'Next Steps', value: 'Clear', note: 'Stay ready for interviews and follow-ups from one place.' },
+    ],
+  },
+  applications: {
+    chips: ['Track My Applications', 'Interview Readiness', 'Latest HR Updates'],
+    spotlightTitle: 'Application Journey',
+    spotlightNote: 'Review each submitted role, understand where you stand, and come back with confidence any time.',
+    highlights: [
+      { label: 'Status View', value: 'Live', note: 'See stage changes and momentum in a more organized layout.' },
+      { label: 'Follow-Up', value: 'Ready', note: 'Keep interviews, updates, and HR notes within easy reach.' },
+      { label: 'Momentum', value: 'Focused', note: 'Know what to prepare next without losing track of earlier steps.' },
+    ],
+  },
+};
+
 function CandidateOwnedShell({ titleKey, subtitleKey, children, mode = 'dashboard' }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  const shellChips = mode === 'applications'
-    ? ['Track My Applications', 'Interview Readiness', 'Latest HR Updates']
-    : ['Browse Roles', 'Role Match Radar', 'Interview Readiness'];
+  const modeContent = CANDIDATE_MODE_CONTENT[mode] || CANDIDATE_MODE_CONTENT.dashboard;
+  const shellChips = modeContent.chips;
 
   return (
     <div>
@@ -40,6 +62,32 @@ function CandidateOwnedShell({ titleKey, subtitleKey, children, mode = 'dashboar
             <div className="workspace-chip-list">
               {shellChips.map((item) => (
                 <span key={item} className="workspace-chip">{t(item)}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="workspace-brief-grid">
+          <div className="workspace-brief-card">
+            <div className="workspace-brief-title">{t(modeContent.spotlightTitle)}</div>
+            <div className="workspace-brief-copy">{t(modeContent.spotlightNote)}</div>
+            <div className="workspace-chip-list">
+              {shellChips.map((item) => (
+                <span key={`${mode}-${item}`} className="workspace-chip">{t(item)}</span>
+              ))}
+            </div>
+          </div>
+          <div className="workspace-brief-card">
+            <div className="workspace-brief-title">{t('What feels easier here')}</div>
+            <div className="workspace-signal-list">
+              {modeContent.highlights.map((item) => (
+                <div key={`${mode}-${item.label}`} className="workspace-signal-item">
+                  <div>
+                    <strong>{t(item.label)}</strong>
+                    <div className="workspace-signal-note">{t(item.note)}</div>
+                  </div>
+                  <span>{t(item.value)}</span>
+                </div>
               ))}
             </div>
           </div>

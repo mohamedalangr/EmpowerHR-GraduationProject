@@ -117,6 +117,33 @@ export function HRSubmissionPage() {
   const lastSubmitted = submissions.find((item) => item.submittedAt)?.submittedAt || null;
   const averageScore = insights?.summary?.averageScore ?? 0;
   const highPriorityItems = insights?.summary?.highPriorityItems ?? 0;
+  const selectedFormLabel = forms.find((form) => String(form.formID) === String(selectedForm))?.title || t('No form selected');
+  const submissionPulseCards = useMemo(() => ([
+    {
+      label: t('Selected Form'),
+      value: selectedFormLabel,
+      note: t('The current submission stream being reviewed by HR or Admin.'),
+      accent: '#111827',
+    },
+    {
+      label: t('Completion Rate'),
+      value: `${completionRate}%`,
+      note: t('How many employees have completed this form so far.'),
+      accent: '#7C3AED',
+    },
+    {
+      label: t('Average Answers'),
+      value: avgAnswers,
+      note: t('Typical answer depth visible in the current response set.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Priority Flags'),
+      value: highPriorityItems,
+      note: t('Signals that may need HR follow-up or closer review.'),
+      accent: '#F59E0B',
+    },
+  ]), [avgAnswers, completionRate, highPriorityItems, selectedFormLabel, t]);
 
   const handleExport = () => {
     const rows = [
@@ -213,6 +240,16 @@ export function HRSubmissionPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 20 }}>
+        {submissionPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Stats */}
       <div className="hr-stats-grid" style={{ marginBottom: 20 }}>
         {[
@@ -274,7 +311,8 @@ export function HRSubmissionPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {(insights?.questionInsights || []).slice(0, 5).map((item) => (
-                <div key={item.questionID} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
+                <div key={item.questionID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Question signal')}</div>
                   <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>{item.questionText}</div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-600)' }}>{t(item.fieldType)} • {t('Response Rate')}: {item.responseRate ?? 0}%</div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 4 }}>
@@ -293,7 +331,8 @@ export function HRSubmissionPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {(insights?.followUpItems || []).map((item) => (
-                <div key={`${item.questionID}-${item.priority}`} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
+                <div key={`${item.questionID}-${item.priority}`} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Priority follow-up')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.questionText}</strong>
                     <Badge label={t(item.priority)} color={item.priority === 'High' ? 'red' : 'orange'} />

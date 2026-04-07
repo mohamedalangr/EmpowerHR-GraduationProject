@@ -175,6 +175,32 @@ export function HREmployeesPage() {
       coveragePct: totalChecks ? Math.round((completedChecks / totalChecks) * 100) : 0,
     };
   }, [employees]);
+  const employeePulseCards = useMemo(() => ([
+    {
+      label: t('Roster Size'),
+      value: employees.length,
+      note: t('Employees currently managed inside the directory workspace.'),
+      accent: '#111827',
+    },
+    {
+      label: t('Active Roster'),
+      value: activeCount,
+      note: t('People currently active across departments and teams.'),
+      accent: '#22C55E',
+    },
+    {
+      label: t('Follow-Up Watch'),
+      value: rosterSummary.followUpCount ?? followUpCount,
+      note: t('Profiles or risk flags that may need HR attention.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Profile Completeness'),
+      value: `${dataQuality.coveragePct}%`,
+      note: t('Directory quality across salary, department, and location fields.'),
+      accent: dataQuality.coveragePct >= 80 ? '#16A34A' : '#E8321A',
+    },
+  ]), [activeCount, dataQuality.coveragePct, employees.length, followUpCount, rosterSummary.followUpCount, t]);
   const formatDate = (value) => (value ? new Date(value).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US') : '—');
   const formatDateTime = (value) => (value ? new Date(value).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US') : '—');
   const riskColor = (level) => {
@@ -492,6 +518,16 @@ export function HREmployeesPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 22 }}>
+        {employeePulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="hr-stats-grid" style={{ marginBottom: 22 }}>
         {[
           { label: 'Total Employees', value: employees.length },
@@ -560,7 +596,8 @@ export function HREmployeesPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {(rosterHealth?.followUpItems || []).map((item) => (
-                <div key={item.employeeID} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
+                <div key={item.employeeID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Roster follow-up')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
                     <Badge label={t(item.priority)} color={item.priority === 'High' ? 'red' : item.priority === 'Medium' ? 'orange' : 'gray'} />

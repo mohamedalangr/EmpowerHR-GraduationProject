@@ -95,6 +95,33 @@ export function HRPayrollPage() {
     followUpCount: watchSummary.followUpCount ?? 0,
   }), [records, watchSummary]);
 
+  const payrollPulseCards = useMemo(() => ([
+    {
+      label: t('Release Queue'),
+      value: stats.pendingCount,
+      note: t('Draft payroll runs waiting for approval or payment release.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Overdue Items'),
+      value: watchSummary.overdueCount ?? 0,
+      note: t('Runs that are aging past the expected release window.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Departments Covered'),
+      value: departmentBreakdown.length,
+      note: t('Teams represented in the current payroll overview.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Follow-Up Watch'),
+      value: followUpItems.length,
+      note: t('Employees or records that still need confirmation.'),
+      accent: '#7C3AED',
+    },
+  ]), [departmentBreakdown.length, followUpItems.length, stats.pendingCount, t, watchSummary.overdueCount]);
+
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -237,6 +264,16 @@ export function HRPayrollPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {payrollPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>

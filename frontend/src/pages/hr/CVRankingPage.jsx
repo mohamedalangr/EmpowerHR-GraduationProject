@@ -131,6 +131,38 @@ export function HRCVRankingPage() {
     .filter(Boolean);
 
   const topRecommendation = topCandidate ? getRecommendation(topCandidate) : null;
+  const stageCounts = {
+    applied: pipelineCandidates.filter((item) => item.review_stage === 'Applied').length,
+    shortlisted: pipelineCandidates.filter((item) => item.review_stage === 'Shortlisted').length,
+    interview: pipelineCandidates.filter((item) => item.review_stage === 'Interview').length,
+    hired: submissions.filter((item) => item.review_stage === 'Hired').length,
+  };
+  const rankingPulseCards = [
+    {
+      label: t('Live Pipeline'),
+      value: pipelineCandidates.length,
+      note: t('Candidates currently moving through the active hiring flow.'),
+      accent: '#111827',
+    },
+    {
+      label: t('Shortlisted'),
+      value: stageCounts.shortlisted,
+      note: t('Profiles already advanced for closer review.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Interview Stage'),
+      value: stageCounts.interview,
+      note: t('Candidates currently in interview coordination.'),
+      accent: '#7C3AED',
+    },
+    {
+      label: t('Ranked Results'),
+      value: rankings.length,
+      note: t('Profiles scored by the ATS view for this selected role.'),
+      accent: '#2563EB',
+    },
+  ];
 
   const clearRankingFilters = () => {
     setSearchTerm('');
@@ -460,6 +492,39 @@ export function HRCVRankingPage() {
           </div>
         )}
 
+        {selectedJob && (
+          <div className="workspace-brief-grid" style={{ marginBottom: 16 }}>
+            <div className="workspace-brief-card">
+              <div className="workspace-brief-title">{t('Role snapshot')}</div>
+              <div className="workspace-brief-copy">{selectedJob.title} • {(selectedJob.required_skills || []).length} {t('required skills')} • {submissionStageFilter === 'active' ? t('Active pipeline view') : t('History view')}</div>
+              <div className="workspace-chip-list">
+                <span className="workspace-chip">{t('Applied')} {stageCounts.applied}</span>
+                <span className="workspace-chip">{t('Shortlisted')} {stageCounts.shortlisted}</span>
+                <span className="workspace-chip">{t('Interview')} {stageCounts.interview}</span>
+              </div>
+            </div>
+            <div className="workspace-brief-card">
+              <div className="workspace-brief-title">{t('Ranking flow')}</div>
+              <div className="workspace-signal-list">
+                <div className="workspace-signal-item">
+                  <div>
+                    <strong>{t('Compare top profiles')}</strong>
+                    <div className="workspace-signal-note">{t('Use shortlist and compare tools to review candidates side by side.')}</div>
+                  </div>
+                  <span>{t('Ready')}</span>
+                </div>
+                <div className="workspace-signal-item">
+                  <div>
+                    <strong>{t('Move pipeline stages')}</strong>
+                    <div className="workspace-signal-note">{t('Keep hiring decisions visible from applied to hired history.')}</div>
+                  </div>
+                  <span>{t('Live')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {/* Rank Button */}
           <Btn
@@ -493,6 +558,16 @@ export function HRCVRankingPage() {
             {t('Clear Uploaded CVs')}
           </button>
         </div>
+      </div>
+
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {rankingPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
       </div>
 
       {rankings.length > 0 && (

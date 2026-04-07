@@ -89,6 +89,33 @@ export function HRExpensesPage() {
     followUp: watchSummary.followUpCount ?? 0,
   }), [claims, watchSummary]);
 
+  const expensePulseCards = useMemo(() => ([
+    {
+      label: t('Review Queue'),
+      value: stats.submitted,
+      note: t('Claims waiting for a decision before reimbursement can move forward.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Overdue Reviews'),
+      value: watchSummary.overdueCount ?? 0,
+      note: t('Submissions that have stayed open longer than the expected SLA.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Spend Categories'),
+      value: categoryBreakdown.length,
+      note: t('Expense categories represented in the current reimbursement queue.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Reimbursement Watch'),
+      value: followUpItems.length,
+      note: t('Claims that still need review notes, action, or final payout handling.'),
+      accent: '#7C3AED',
+    },
+  ]), [categoryBreakdown.length, followUpItems.length, stats.submitted, t, watchSummary.overdueCount]);
+
   const handleExportWatch = () => {
     try {
       const rows = [
@@ -194,6 +221,16 @@ export function HRExpensesPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {expensePulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Claims', value: stats.total, accent: '#111827' },
@@ -223,16 +260,21 @@ export function HRExpensesPage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item) => (
-                <div key={item.claimID} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={item.claimID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Expense follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.title} · {t(item.category)}</div>
                     </div>
                     <Badge label={t(item.followUpState || item.status)} color={WATCH_COLORS[item.followUpState] || STATUS_COLORS[item.status] || 'gray'} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <Badge label={t(item.category)} color="accent" />
+                    <Badge label={t(item.status)} color={STATUS_COLORS[item.status] || 'gray'} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                     ${Number(item.amount || 0).toFixed(2)} · {item.ageDays ?? 0} {t('days open')}
                   </div>
                 </div>

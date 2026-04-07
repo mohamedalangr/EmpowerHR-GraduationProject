@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Spinner, Modal, Btn, Badge, useToast } from '../../components/shared/index.jsx';
 import { getJobs, hrGetJobPipelineHealth, createJob, updateJob } from '../../api/index.js';
@@ -206,6 +206,33 @@ export function HRJobPostingsPage() {
     }
   };
 
+  const jobPulseCards = useMemo(() => ([
+    {
+      label: t('Open Roles'),
+      value: pipelineTotals.activeJobs ?? jobs.filter((job) => job.is_active).length,
+      note: t('Positions currently live and accepting applications.'),
+      accent: '#22C55E',
+    },
+    {
+      label: t('Applicants in Funnel'),
+      value: pipelineTotals.totalCandidates ?? jobs.reduce((sum, job) => sum + (job.submission_count || 0), 0),
+      note: t('Candidates moving through sourcing, review, and interview steps.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Talent Pool'),
+      value: pipelineTotals.talentPoolCandidates ?? 0,
+      note: t('Promising profiles saved for current or future openings.'),
+      accent: '#7C3AED',
+    },
+    {
+      label: t('Sourcing Gaps'),
+      value: pipelineTotals.jobsWithoutApplicants ?? 0,
+      note: t('Roles that may need stronger outreach or refreshed visibility.'),
+      accent: '#E8321A',
+    },
+  ]), [jobs, pipelineTotals.activeJobs, pipelineTotals.jobsWithoutApplicants, pipelineTotals.talentPoolCandidates, pipelineTotals.totalCandidates, t]);
+
   const WeightInput = ({ label, fieldKey }) => (
     <div>
       <label style={labelStyle}>{label}</label>
@@ -306,6 +333,16 @@ export function HRJobPostingsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 22 }}>
+        {jobPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Stats */}
       <div className="hr-stats-grid" style={{ marginBottom: 28 }}>
         {[
@@ -382,7 +419,8 @@ export function HRJobPostingsPage() {
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {followUpItems.map((item) => (
-                  <div key={item.id} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
+                  <div key={item.id} className="workspace-action-card">
+                    <div className="workspace-action-eyebrow">{t('Recruiting follow-up')}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{item.candidateName || item.jobTitle}</div>

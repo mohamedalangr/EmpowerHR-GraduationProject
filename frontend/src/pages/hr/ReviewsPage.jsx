@@ -75,6 +75,32 @@ export function HRReviewsPage() {
   }, [calibration, reviews]);
 
   const reviewPeriods = useMemo(() => [...new Set(reviews.map((review) => review.reviewPeriod).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [reviews]);
+  const reviewPulseCards = useMemo(() => ([
+    {
+      label: t('Review Cycles'),
+      value: reviewPeriods.length,
+      note: t('Distinct periods currently represented in performance reviews.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Pending Acknowledgment'),
+      value: stats.pendingAcknowledgements,
+      note: t('Submitted reviews still awaiting employee acknowledgement.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Calibration Alerts'),
+      value: stats.calibrationAlerts,
+      note: t('Review items that may need extra HR or leadership attention.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Avg. Rating'),
+      value: stats.averageRating,
+      note: t('Overall performance sentiment across the current review set.'),
+      accent: '#10B981',
+    },
+  ]), [reviewPeriods.length, stats.averageRating, stats.calibrationAlerts, stats.pendingAcknowledgements, t]);
 
   const applyEmployeeDefaults = (employee) => {
     setSelectedEmployee(employee || null);
@@ -206,6 +232,16 @@ export function HRReviewsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {reviewPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Total Reviews', value: stats.total, accent: '#111827' },
@@ -235,7 +271,8 @@ export function HRReviewsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {(calibration?.followUpItems || []).map((item) => (
-                <div key={`${item.reviewID}-${item.employeeID}`} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
+                <div key={`${item.reviewID}-${item.employeeID}`} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Calibration follow-up')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
                     <Badge color={priorityTone(item.priority)} label={t(item.priority)} />

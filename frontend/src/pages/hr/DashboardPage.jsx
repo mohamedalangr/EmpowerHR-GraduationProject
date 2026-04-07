@@ -301,6 +301,27 @@ export function HRDashboardPage() {
     { label: t('nav.training'), value: `${totals.trainingCompletionRate ?? 0}%`, accent: '#10B981', sub: `${trainingSummary.completedLearners ?? 0}/${trainingSummary.assignedLearners ?? 0} ${t('learners complete')}` },
   ]), [totals, trainingSummary, attendanceSummary, leaveSummary, payrollSummary, t]);
 
+  const dashboardPulseCards = useMemo(() => ([
+    {
+      label: t('Open Action Plans'),
+      value: openActionPlans.length,
+      note: `${highRiskWithoutPlans.length} ${t('high-risk employees still need a plan')}`,
+      accent: '#E8321A',
+    },
+    {
+      label: t('Priority Queue'),
+      value: priorityQueue.length,
+      note: t('AI-suggested follow-up items ready for review.'),
+      accent: '#7C3AED',
+    },
+    {
+      label: t('Recognition Coverage'),
+      value: recognitionSummary.recognizedThisMonth ?? 0,
+      note: `${recognitionSummary.employeesWithoutRecognition ?? 0} ${t('employees without recent recognition')}`,
+      accent: '#2563EB',
+    },
+  ]), [highRiskWithoutPlans.length, openActionPlans.length, priorityQueue.length, recognitionSummary.employeesWithoutRecognition, recognitionSummary.recognizedThisMonth, t]);
+
   return (
     <div className="hr-page-shell">
       <div className="hr-page-header is-split">
@@ -321,6 +342,16 @@ export function HRDashboardPage() {
         <div style={{ textAlign: 'center', padding: 50 }}><Spinner /></div>
       ) : (
         <>
+          <div className="workspace-journey-strip">
+            {dashboardPulseCards.map((card) => (
+              <div key={card.label} className="workspace-journey-card">
+                <div className="workspace-journey-title">{card.label}</div>
+                <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+                <div className="workspace-journey-note">{card.note}</div>
+              </div>
+            ))}
+          </div>
+
           <div className="hr-stats-grid">
             {workforceCards.map((card) => (
               <div key={card.label} className="hr-stat-card" style={{ padding: '20px 24px' }}>
@@ -341,12 +372,15 @@ export function HRDashboardPage() {
               ) : (
                 <div style={{ padding: '8px 0' }}>
                   {departmentBreakdown.map((item) => (
-                    <div key={item.department} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{t(item.department || 'Unassigned')}</div>
-                        <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{Math.round((item.count / Math.max(totals.totalEmployees || 1, 1)) * 100)}% {t('of workforce')}</div>
+                    <div key={item.department} className="workspace-action-card" style={{ margin: '8px 12px 0' }}>
+                      <div className="workspace-action-eyebrow">{t('Department view')}</div>
+                      <div className="workspace-action-card-head">
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{t(item.department || 'Unassigned')}</div>
+                          <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{Math.round((item.count / Math.max(totals.totalEmployees || 1, 1)) * 100)}% {t('of workforce')}</div>
+                        </div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--red)' }}>{item.count}</div>
                       </div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--red)' }}>{item.count}</div>
                     </div>
                   ))}
                 </div>
@@ -539,7 +573,8 @@ export function HRDashboardPage() {
                   {recognitionFollowUpItems.slice(0, 5).map((item) => {
                     const tone = recognitionTone(item.followUpState);
                     return (
-                      <div key={`${item.employeeID}-${item.followUpState}`} style={{ border: '1px solid #EEF0F3', borderRadius: 12, padding: '10px 12px' }}>
+                      <div key={`${item.employeeID}-${item.followUpState}`} className="workspace-action-card">
+                        <div className="workspace-action-eyebrow">{t('Recognition follow-up')}</div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                           <div>
                             <div style={{ fontWeight: 700 }}>{item.employeeName || item.employeeID}</div>
@@ -608,7 +643,8 @@ export function HRDashboardPage() {
               ) : (
                 <div style={{ display: 'grid', gap: 10 }}>
                   {priorityQueue.slice(0, 5).map((item) => (
-                    <div key={item.employeeID} style={{ border: '1px solid #EEF0F3', borderRadius: 12, padding: '10px 12px' }}>
+                    <div key={item.employeeID} className="workspace-action-card">
+                      <div className="workspace-action-eyebrow">{t('Priority employee')}</div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 13.5 }}>{item.fullName}</div>
@@ -660,7 +696,8 @@ export function HRDashboardPage() {
             ) : (
               <div style={{ display: 'grid', gap: 10 }}>
                 {actionPlans.slice(0, 6).map((plan) => (
-                  <div key={plan.taskID} style={{ border: '1px solid #EEF0F3', borderRadius: 12, padding: '10px 12px' }}>
+                  <div key={plan.taskID} className="workspace-action-card">
+                    <div className="workspace-action-eyebrow">{t('Execution plan')}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 13.5 }}>{plan.title}</div>

@@ -94,6 +94,33 @@ export function HRBenefitsPage() {
     followUp: watchSummary.followUpCount ?? 0,
   }), [benefits, watchSummary]);
 
+  const benefitPulseCards = useMemo(() => ([
+    {
+      label: t('Enrollment Queue'),
+      value: stats.pending,
+      note: t('Benefit requests or plan changes still waiting for HR confirmation.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Overdue Renewals'),
+      value: watchSummary.overdueCount ?? 0,
+      note: t('Enrollments nearing their effective dates or still missing review.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Coverage Mix'),
+      value: benefitTypeBreakdown.length,
+      note: t('Plan categories currently represented across active enrollments.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Action Watch'),
+      value: followUpItems.length,
+      note: t('Employees whose benefits still need provider, date, or status follow-up.'),
+      accent: '#7C3AED',
+    },
+  ]), [benefitTypeBreakdown.length, followUpItems.length, stats.pending, t, watchSummary.overdueCount]);
+
   const benefitNames = useMemo(() => [...new Set(benefits.map((item) => item.benefitName).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
   const providers = useMemo(() => [...new Set(benefits.map((item) => item.provider).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
   const coverageLevels = useMemo(() => [...new Set(benefits.map((item) => item.coverageLevel).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [benefits]);
@@ -221,6 +248,16 @@ export function HRBenefitsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {benefitPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Plans', value: stats.total, accent: '#111827' },
@@ -250,16 +287,21 @@ export function HRBenefitsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item) => (
-                <div key={item.enrollmentID} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={item.enrollmentID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Benefits follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.benefitName} · {t(item.benefitType)}</div>
                     </div>
                     <Badge label={t(item.dueState || item.status)} color={WATCH_COLORS[item.dueState] || STATUS_COLORS[item.status] || 'gray'} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <Badge label={t(item.benefitType)} color="accent" />
+                    <Badge label={item.coverageLevel || t('Coverage TBD')} color="gray" />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                     {item.effectiveDate ? `${t('Effective')}: ${item.effectiveDate}` : t('No effective date set')} · {item.contributionRate ?? 0}% {t('employee contribution')}
                   </div>
                 </div>

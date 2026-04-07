@@ -88,6 +88,33 @@ export function HRDocumentsPage() {
     followUp: watchSummary.followUpCount ?? 0,
   }), [documents, watchSummary]);
 
+  const documentPulseCards = useMemo(() => ([
+    {
+      label: t('Open Requests'),
+      value: stats.open,
+      note: t('Employee document requests currently moving through intake and issuance.'),
+      accent: '#E8321A',
+    },
+    {
+      label: t('Overdue Issuance'),
+      value: watchSummary.overdueCount ?? 0,
+      note: t('Requests that need faster processing or final handoff to the employee.'),
+      accent: '#F59E0B',
+    },
+    {
+      label: t('Document Mix'),
+      value: documentTypeBreakdown.length,
+      note: t('Types of letters and certificates represented in the current queue.'),
+      accent: '#2563EB',
+    },
+    {
+      label: t('Service Watch'),
+      value: followUpItems.length,
+      note: t('Requests still needing notes, approval, or pickup coordination.'),
+      accent: '#7C3AED',
+    },
+  ]), [documentTypeBreakdown.length, followUpItems.length, stats.open, t, watchSummary.overdueCount]);
+
   const handleExportWatch = () => {
     try {
       const rows = [
@@ -193,6 +220,16 @@ export function HRDocumentsPage() {
         </div>
       </div>
 
+      <div className="workspace-journey-strip" style={{ marginBottom: 24 }}>
+        {documentPulseCards.map((card) => (
+          <div key={card.label} className="workspace-journey-card">
+            <div className="workspace-journey-title">{card.label}</div>
+            <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+            <div className="workspace-journey-note">{card.note}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Requests', value: stats.total, accent: '#111827' },
@@ -222,16 +259,21 @@ export function HRDocumentsPage() {
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {followUpItems.map((item) => (
-                <div key={item.requestID} style={{ border: '1px solid #F1F5F9', borderRadius: 14, padding: '14px 16px', background: '#fff' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                <div key={item.requestID} className="workspace-action-card">
+                  <div className="workspace-action-eyebrow">{t('Document follow-up')}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start', marginBottom: 6 }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{item.employeeName}</div>
                       <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{t(item.documentType)} · {item.purpose}</div>
                     </div>
                     <Badge label={t(item.followUpState || item.status)} color={WATCH_COLORS[item.followUpState] || STATUS_COLORS[item.status] || 'gray'} />
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <Badge label={t(item.documentType)} color="accent" />
+                    <Badge label={t(item.status)} color={STATUS_COLORS[item.status] || 'gray'} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                     {item.ageDays ?? 0} {t('days open')}
                   </div>
                 </div>
