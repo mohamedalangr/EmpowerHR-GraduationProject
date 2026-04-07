@@ -3,6 +3,7 @@ from .views import (
     RunAttritionPredictionView,
     AttritionPredictionListView,
     AttritionPredictionLatestView,
+    AttritionGovernanceSummaryView,
 )
 
 urlpatterns = [
@@ -14,4 +15,7 @@ urlpatterns = [
 
     # GET  /api/attrition/predictions/latest/   latest prediction per employee
     path('predictions/latest/', AttritionPredictionLatestView.as_view(), name='attrition-latest'),
+
+    # GET  /api/attrition/governance/           governance snapshot for model confidence and review load
+    path('governance/', AttritionGovernanceSummaryView.as_view(), name='attrition-governance'),
 ]

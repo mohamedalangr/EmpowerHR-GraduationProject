@@ -8,10 +8,12 @@ Place your model JSON file at:
     backend/attrition/xgboost_model.json
 """
 
+import logging
 import os
 
 import numpy as np
 import xgboost as xgb
+from django.conf import settings
 
 # Path to the saved model JSON file
 MODEL_PATH = os.path.join(os.path.dirname(__file__), 'xgboost_model.json')
@@ -55,7 +57,15 @@ FEATURE_NAMES = [
 ]
 
 SEVERITY_ORDER = {'high': 3, 'medium': 2, 'low': 1}
+PROTECTED_ATTRIBUTE_LABELS = ['Age', 'Gender', 'Marital Status']
+PROTECTED_FEATURE_DEFAULTS = {
+    'Age': float(getattr(settings, 'ATTRITION_PROTECTED_DEFAULT_AGE', 35.0)),
+    'Gender': 0.0,
+    'Marital Status_Married': 0.0,
+    'Marital Status_Single': 0.0,
+}
 
+logger = logging.getLogger(__name__)
 _model = None
 
 
@@ -129,12 +139,11 @@ def build_feature_vector(employee, answers_qs):
 
     answer_values = collect_answer_signals(answers_qs)
 
-    # Marital status one-hot
-    marital_married = 1 if employee.maritalStatus == 'Married' else 0
-    marital_single = 1 if employee.maritalStatus == 'Single' else 0
-
-    # Gender encoding (Male=1, Female=0)
-    gender = 1 if employee.gender == 'Male' else 0
+    # Protected HR attributes are neutralized at inference time so live decisions
+    # are not driven by age, gender, or marital status.
+    marital_married = PROTECTED_FEATURE_DEFAULTS['Marital Status_Married']
+    marital_single = PROTECTED_FEATURE_DEFAULTS['Marital Status_Single']
+    gender = PROTECTED_FEATURE_DEFAULTS['Gender']
 
     # Feedback answers
     wlb = get(answer_values['work_life_balance'], 'Work-Life Balance')
@@ -146,7 +155,7 @@ def build_feature_vector(employee, answers_qs):
     recognition = get(answer_values['employee_recognition'], 'Employee Recognition')
 
     vector = [
-        get(employee.age, 'Age'),
+        PROTECTED_FEATURE_DEFAULTS['Age'],
         gender,
         get(employee.yearsAtCompany, 'Years at Company'),
         get(employee.monthlyIncome, 'Monthly Income'),
@@ -171,6 +180,84 @@ def build_feature_vector(employee, answers_qs):
     ]
 
     return np.array(vector, dtype=float), missing
+
+
+def _derive_risk_level(risk_score):
+    score = float(risk_score or 0)
+    if score >= 0.65:
+        return 'High'
+    if score >= 0.40:
+        return 'Medium'
+    return 'Low'
+
+
+def _compute_prediction_confidence(missing_fields=None, prediction_source='xgboost'):
+    missing_count = len(set(missing_fields or []))
+    coverage = max(0.2, 1.0 - (missing_count / max(len(FEATURE_NAMES), 1)))
+    if prediction_source != 'xgboost':
+        coverage = min(coverage, 0.58)
+    coverage = round(float(coverage), 2)
+    label = 'High' if coverage >= 0.8 else 'Medium' if coverage >= 0.6 else 'Low'
+    return coverage, label
+
+
+def _fallback_attrition_score(employee, answer_values):
+    score = 0.18
+
+    if employee.overtime:
+        score += 0.10
+    if employee.performanceRating is not None and employee.performanceRating <= 2:
+        score += 0.10
+    if employee.yearsAtCompany is not None and employee.yearsAtCompany >= 5 and (employee.numberOfPromotions or 0) == 0:
+        score += 0.08
+    if employee.remoteWork is False:
+        score += 0.04
+
+    signal_weights = {
+        'work_life_balance': 0.16,
+        'job_satisfaction': 0.18,
+        'leadership': 0.08,
+        'innovation': 0.05,
+        'company_reputation': 0.05,
+        'employee_recognition': 0.09,
+    }
+    for key, weight in signal_weights.items():
+        value = answer_values.get(key)
+        if value is None:
+            continue
+        if value <= 1:
+            score += weight
+        elif value <= 2:
+            score += weight * 0.65
+
+    distance = answer_values.get('distance_from_home')
+    if distance is not None and distance >= 20:
+        score += 0.07
+
+    return round(min(max(score, 0.05), 0.95), 4)
+
+
+def build_prediction_metadata(risk_score=None, missing_fields=None, prediction_source='xgboost'):
+    confidence_score, confidence_label = _compute_prediction_confidence(
+        missing_fields=missing_fields,
+        prediction_source=prediction_source,
+    )
+    governance_notice = getattr(
+        settings,
+        'AI_GOVERNANCE_NOTICE',
+        'AI outputs are advisory only and must be reviewed by HR before any employment decision.',
+    )
+    return {
+        'confidenceScore': confidence_score,
+        'confidenceLabel': confidence_label,
+        'predictionSource': prediction_source,
+        'modelVersion': getattr(settings, 'ATTRITION_MODEL_VERSION', 'xgboost-attrition-v2-governed'),
+        'decisionSupportOnly': getattr(settings, 'AI_DECISION_SUPPORT_ONLY', True),
+        'reviewRequired': True,
+        'neutralizedProtectedFields': list(PROTECTED_ATTRIBUTE_LABELS),
+        'fairnessNotice': 'Protected HR attributes are neutralized at inference time and this output must not be used as the sole basis for an HR decision.',
+        'governanceNotice': governance_notice,
+    }
 
 
 def build_prediction_insights(employee, answers_qs=None, risk_score=None, risk_level=None, missing_fields=None):
@@ -364,19 +451,25 @@ def predict_risk(employee, answers_qs):
             'recommendedActions': list,
         }
     """
-    model = load_model()
     vector, missing = build_feature_vector(employee, answers_qs)
+    answer_values = collect_answer_signals(answers_qs)
+    prediction_source = 'xgboost'
+    prediction_warnings = []
 
-    # XGBoost expects a 2D array
-    proba = model.predict_proba(vector.reshape(1, -1))[0][1]
-    risk_score = round(float(proba), 4)
+    try:
+        model = load_model()
+        # XGBoost expects a 2D array
+        proba = model.predict_proba(vector.reshape(1, -1))[0][1]
+        risk_score = round(float(proba), 4)
+    except Exception as exc:
+        if not getattr(settings, 'AI_FALLBACK_ON_MODEL_ERROR', True):
+            raise
+        logger.warning('Attrition model unavailable, using heuristic fallback for %s: %s', employee.employeeID, exc)
+        prediction_source = 'heuristic-fallback'
+        prediction_warnings.append('Heuristic fallback was used because the trained attrition model was unavailable.')
+        risk_score = _fallback_attrition_score(employee, answer_values)
 
-    if risk_score >= 0.65:
-        risk_level = 'High'
-    elif risk_score >= 0.40:
-        risk_level = 'Medium'
-    else:
-        risk_level = 'Low'
+    risk_level = _derive_risk_level(risk_score)
 
     insights = build_prediction_insights(
         employee=employee,
@@ -385,6 +478,11 @@ def predict_risk(employee, answers_qs):
         risk_level=risk_level,
         missing_fields=missing,
     )
+    metadata = build_prediction_metadata(
+        risk_score=risk_score,
+        missing_fields=missing,
+        prediction_source=prediction_source,
+    )
 
     return {
         'employeeID': employee.employeeID,
@@ -392,5 +490,7 @@ def predict_risk(employee, answers_qs):
         'riskScore': risk_score,
         'riskLevel': risk_level,
         'missingFields': missing,
+        'predictionWarnings': prediction_warnings,
         **insights,
+        **metadata,
     }

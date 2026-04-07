@@ -28,6 +28,10 @@ class AttritionPrediction(models.Model):
                        related_name='attrition_predictions')
     riskScore      = models.FloatField()           # raw probability 0.0 - 1.0
     riskLevel      = models.CharField(max_length=10, choices=RISK_CHOICES)
+    confidenceScore = models.FloatField(default=0.0)
+    predictionSource = models.CharField(max_length=40, default='xgboost', blank=True)
+    modelVersion   = models.CharField(max_length=100, default='xgboost-attrition-v2-governed', blank=True)
+    reviewRequired = models.BooleanField(default=True)
     feedbackFormID = models.CharField(max_length=50, null=True, blank=True)  # which form triggered this
     predictedAt    = models.DateTimeField(auto_now_add=True)
 

@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.urls import reverse
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -167,6 +167,28 @@ class RecruitmentPublicFlowTests(TestCase):
         submission = Submission.objects.get(candidate_email='jane.candidate@test.com')
         self.assertEqual(submission.review_stage, 'Applied')
         self.assertTrue(submission.talent_pool)
+
+    @override_settings(AI_PIPELINE_ASYNC=True)
+    def test_public_submit_can_queue_ai_processing_when_async_enabled(self):
+        response = self.client.post(
+            '/api/recruitment/submit/',
+            {
+                'job': self.job.id,
+                'candidate_name': 'Async Candidate',
+                'candidate_email': 'async.candidate@test.com',
+                'resume_file': SimpleUploadedFile(
+                    'async-candidate.txt',
+                    b'Async Candidate\nReact JavaScript CSS and UI testing experience for 3 years.',
+                    content_type='text/plain',
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.data['processingMode'], 'async')
+        self.assertTrue(response.data['decisionSupportOnly'])
+        submission = Submission.objects.get(candidate_email='async.candidate@test.com')
+        self.assertEqual(submission.status, Submission.Status.PROCESSING)
 
     def test_hr_can_update_candidate_pipeline_stage(self):
         submission = Submission.objects.create(
@@ -1400,13 +1422,20 @@ class AttritionExplainabilityTests(TestCase):
         self.assertIn('explanationSummary', prediction)
         self.assertIn('riskDrivers', prediction)
         self.assertIn('recommendedActions', prediction)
+        self.assertIn('confidenceLabel', prediction)
+        self.assertIn('modelVersion', prediction)
+        self.assertIn('decisionSupportOnly', prediction)
+        self.assertIn('neutralizedProtectedFields', prediction)
         self.assertTrue(len(prediction['riskDrivers']) >= 1)
         self.assertTrue(len(prediction['recommendedActions']) >= 1)
+        self.assertTrue(prediction['decisionSupportOnly'])
+        self.assertIn('Age', prediction['neutralizedProtectedFields'])
 
         latest_response = self.client.get(reverse('attrition-latest'))
         self.assertEqual(latest_response.status_code, 200)
         self.assertIn('explanationSummary', latest_response.data[0])
         self.assertIn('recommendedActions', latest_response.data[0])
+        self.assertIn('confidenceLabel', latest_response.data[0])
 
 
 class AttendanceLeaveTests(TestCase):

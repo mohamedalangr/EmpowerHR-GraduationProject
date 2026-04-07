@@ -174,6 +174,18 @@ SENTENCE_TRANSFORMER_MODEL = os.getenv(
     "anass1209/resume-job-matcher-all-MiniLM-L6-v2",
 )
 
+# AI governance and production hardening
+AI_DECISION_SUPPORT_ONLY = env_bool("AI_DECISION_SUPPORT_ONLY", True)
+AI_PIPELINE_ASYNC = env_bool("AI_PIPELINE_ASYNC", not DEBUG)
+AI_ALLOW_RUNTIME_NLTK_DOWNLOAD = env_bool("AI_ALLOW_RUNTIME_NLTK_DOWNLOAD", DEBUG)
+AI_FALLBACK_ON_MODEL_ERROR = env_bool("AI_FALLBACK_ON_MODEL_ERROR", True)
+ATTRITION_MODEL_VERSION = os.getenv("ATTRITION_MODEL_VERSION", "xgboost-attrition-v2-governed")
+ATTRITION_PROTECTED_DEFAULT_AGE = float(os.getenv("ATTRITION_PROTECTED_DEFAULT_AGE", "35"))
+AI_GOVERNANCE_NOTICE = os.getenv(
+    "AI_GOVERNANCE_NOTICE",
+    "AI outputs are advisory only and must be reviewed by HR before any hiring, retention, promotion, or termination decision.",
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LANGUAGE_CODE = "en-us"
 TIME_ZONE     = "UTC"

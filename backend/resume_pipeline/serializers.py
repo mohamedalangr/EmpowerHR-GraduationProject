@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 from .models import Job, Submission
 
@@ -30,11 +31,27 @@ class SubmissionSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source="job.title", read_only=True)
     resume_file = serializers.FileField(read_only=True)
     resume_filename = serializers.SerializerMethodField()
+    decisionSupportOnly = serializers.SerializerMethodField()
+    recommendationNotice = serializers.SerializerMethodField()
+    processingMode = serializers.SerializerMethodField()
 
     def get_resume_filename(self, obj):
         if not obj.resume_file:
             return ""
         return obj.resume_file.name.split("/")[-1]
+
+    def get_decisionSupportOnly(self, obj):
+        return getattr(settings, 'AI_DECISION_SUPPORT_ONLY', True)
+
+    def get_recommendationNotice(self, obj):
+        return getattr(
+            settings,
+            'AI_GOVERNANCE_NOTICE',
+            'AI outputs are advisory only and must be reviewed by HR before any employment decision.',
+        )
+
+    def get_processingMode(self, obj):
+        return 'async' if obj.status in {Submission.Status.PENDING, Submission.Status.PROCESSING} and getattr(settings, 'AI_PIPELINE_ASYNC', False) else 'sync'
 
     class Meta:
         model  = Submission
@@ -47,6 +64,7 @@ class SubmissionSerializer(serializers.ModelSerializer):
             "skills_score", "experience_score", "education_score",
             "semantic_score", "ats_score",
             "submitted_at", "scored_at",
+            "decisionSupportOnly", "recommendationNotice", "processingMode",
         ]
         read_only_fields = [
             "tracking_code", "status", "review_stage", "stage_notes", "stage_updated_at", "talent_pool", "stage_history", "error_message",

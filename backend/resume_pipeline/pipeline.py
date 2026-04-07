@@ -82,8 +82,20 @@ def extract_skills(text: str) -> list:
 # ─────────────────────────────────────────────────────────────────────────────
 
 import nltk
-nltk.download("punkt",     quiet=True)
-nltk.download("punkt_tab", quiet=True)
+
+
+def _ensure_nltk_resource(resource_path, download_name):
+    try:
+        nltk.data.find(resource_path)
+    except LookupError:
+        if getattr(settings, 'AI_ALLOW_RUNTIME_NLTK_DOWNLOAD', settings.DEBUG):
+            nltk.download(download_name, quiet=True)
+        else:
+            logger.warning("Missing NLTK resource %s and runtime downloads are disabled.", download_name)
+
+
+_ensure_nltk_resource("tokenizers/punkt", "punkt")
+_ensure_nltk_resource("tokenizers/punkt_tab", "punkt_tab")
 from nltk.tokenize import sent_tokenize
 
 _EDU_KEYWORDS = ["bachelor", "master", "phd", "bsc", "msc",
@@ -91,10 +103,14 @@ _EDU_KEYWORDS = ["bachelor", "master", "phd", "bsc", "msc",
 
 
 def extract_education_sentences(text: str) -> str:
-    """Notebook Cell 8 — exact function."""
+    """Notebook Cell 8 — exact function with a safe fallback if NLTK tokenizers are unavailable."""
     if not isinstance(text, str) or not text.strip():
         return ""
-    sentences = sent_tokenize(text.lower())
+    try:
+        sentences = sent_tokenize(text.lower())
+    except LookupError:
+        logger.warning("NLTK sentence tokenizer unavailable, falling back to regex sentence splitting.")
+        sentences = re.split(r"(?<=[.!?])\s+", text.lower())
     return " ".join(s for s in sentences if any(kw in s for kw in _EDU_KEYWORDS))
 
 
@@ -150,14 +166,27 @@ def _get_model():
     return _transformer_model
 
 
+def _fallback_semantic_score(resume_text: str, jd_text: str) -> float:
+    resume_tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]*", (resume_text or '').lower()))
+    jd_tokens = set(re.findall(r"[a-zA-Z][a-zA-Z0-9+#.-]*", (jd_text or '').lower()))
+    if not resume_tokens or not jd_tokens:
+        return 0.0
+    overlap = len(resume_tokens & jd_tokens)
+    union = len(resume_tokens | jd_tokens)
+    return round((overlap / max(union, 1)) * 100, 2)
+
+
 def compute_semantic_score(resume_text: str, jd_text: str) -> float:
-    """Cosine similarity × 100. Notebook Cell 12 logic."""
-    from sklearn.metrics.pairwise import cosine_similarity
-    import numpy as np
-    model = _get_model()
-    embs  = model.encode([resume_text or "", jd_text or ""])
-    sim   = cosine_similarity([embs[0]], [embs[1]])[0][0]
-    return round(float(sim) * 100, 2)
+    """Cosine similarity × 100 with a safe lexical fallback for production resilience."""
+    try:
+        from sklearn.metrics.pairwise import cosine_similarity
+        model = _get_model()
+        embs = model.encode([resume_text or "", jd_text or ""])
+        sim = cosine_similarity([embs[0]], [embs[1]])[0][0]
+        return round(float(sim) * 100, 2)
+    except Exception as exc:
+        logger.warning("Semantic model unavailable, using lexical similarity fallback: %s", exc)
+        return _fallback_semantic_score(resume_text, jd_text)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

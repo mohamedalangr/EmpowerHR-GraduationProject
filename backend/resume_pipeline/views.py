@@ -6,6 +6,7 @@ from collections import Counter
 from difflib import SequenceMatcher
 from datetime import datetime, timezone as dt_timezone
 from pathlib import Path
+from threading import Timer
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -38,6 +39,17 @@ def _get_pipeline_functions():
             "compute_semantic_score": compute_semantic_score,
         }
     return _PIPELINE_FUNCS
+
+
+def _enqueue_resume_pipeline(submission_id):
+    def _runner():
+        try:
+            submission = Submission.objects.get(pk=submission_id)
+            _get_pipeline_functions()["run_pipeline"](submission)
+        except Exception:
+            logging.getLogger(__name__).exception("Async resume pipeline failed for submission %s", submission_id)
+
+    Timer(0.1, _runner).start()
 
 
 def _ensure_nltk_resource(resource_path, download_name):
@@ -931,16 +943,43 @@ class SubmitResumeView(APIView):
             ]
             submission.save(update_fields=['stage_updated_at', 'stage_history'])
 
+        decision_support_payload = {
+            'decisionSupportOnly': getattr(settings, 'AI_DECISION_SUPPORT_ONLY', True),
+            'recommendationNotice': getattr(
+                settings,
+                'AI_GOVERNANCE_NOTICE',
+                'AI outputs are advisory only and must be reviewed by HR before any employment decision.',
+            ),
+        }
+
+        if getattr(settings, 'AI_PIPELINE_ASYNC', False):
+            submission.status = Submission.Status.PROCESSING
+            submission.save(update_fields=['status'])
+            transaction.on_commit(lambda: _enqueue_resume_pipeline(submission.pk))
+            return Response(
+                {
+                    **SubmissionSerializer(submission).data,
+                    'processingMode': 'async',
+                    **decision_support_payload,
+                    'detail': 'Application received and queued for AI screening.',
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
+
         try:
             _get_pipeline_functions()["run_pipeline"](submission)
             submission.refresh_from_db()
             return Response(
-                SubmissionSerializer(submission).data,
+                {
+                    **SubmissionSerializer(submission).data,
+                    'processingMode': 'sync',
+                    **decision_support_payload,
+                },
                 status=status.HTTP_201_CREATED,
             )
         except Exception as exc:
             return Response(
-                {"detail": f"Pipeline failed: {str(exc)}"},
+                {"detail": f"Pipeline failed: {str(exc)}", **decision_support_payload},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
