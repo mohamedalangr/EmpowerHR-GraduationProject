@@ -59,6 +59,33 @@ def _ensure_nltk_resource(resource_path, download_name):
         nltk.download(download_name, quiet=True)
 
 
+def _as_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _parse_submission_history_filters(request):
+    requested_stage = (request.query_params.get("review_stage") or "").strip()
+    valid_stages = {choice for choice, _ in Submission.ReviewStage.choices}
+    review_stage = requested_stage if requested_stage in valid_stages else ""
+    include_hired = _as_bool(
+        request.query_params.get("include_hired"),
+        default=review_stage == Submission.ReviewStage.HIRED,
+    )
+    return review_stage, include_hired
+
+
+def _job_submission_queryset(job_or_id, *, review_stage="", include_hired=False):
+    lookup = {"job": job_or_id} if isinstance(job_or_id, Job) else {"job_id": job_or_id}
+    submissions = Submission.objects.filter(**lookup)
+    if review_stage:
+        submissions = submissions.filter(review_stage=review_stage)
+    elif not include_hired:
+        submissions = submissions.exclude(review_stage=Submission.ReviewStage.HIRED)
+    return submissions.order_by("-stage_updated_at", "-submitted_at")
+
+
 def _candidate_display_name(submission):
     name = (submission.candidate_name or '').strip()
     if name:
@@ -580,13 +607,13 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
     results.sort(key=lambda x: x["final_score"], reverse=True)
     return results
 
-def rank_cvs_for_job(job_id):
+def rank_cvs_for_job(job_id, review_stage="", include_hired=False):
     try:
         job = Job.objects.get(pk=job_id)
     except Job.DoesNotExist:
         return {"error": "Job not found"}
 
-    submissions = Submission.objects.filter(job=job).order_by("-submitted_at")
+    submissions = _job_submission_queryset(job, review_stage=review_stage, include_hired=include_hired)
 
     key_skills = job.required_skills or []
     job_description = job.description or ""
@@ -618,9 +645,10 @@ def rank_cvs_for_job(job_id):
             'candidate_skills': sub.candidate_skills or [],
         })
 
+    include_media_entries = not review_stage or review_stage == Submission.ReviewStage.APPLIED
     media_root = Path(getattr(settings, "MEDIA_ROOT", ""))
     resumes_dir = media_root / "resumes"
-    if resumes_dir.exists() and resumes_dir.is_dir():
+    if include_media_entries and resumes_dir.exists() and resumes_dir.is_dir():
         for path in sorted(resumes_dir.rglob("*")):
             if not path.is_file() or path.suffix.lower() not in {".pdf", ".txt"}:
                 continue
@@ -1025,14 +1053,12 @@ class CandidateApplicationListView(APIView):
 
 
 class JobSubmissionsView(APIView):
-    """GET /api/jobs/{id}/submissions/ — all results for a job, ranked by ATS score."""
+    """GET /api/jobs/{id}/submissions/ — active job applications by default, with optional history filters."""
     permission_classes = [IsHRManager]
+
     def get(self, request, pk):
-        submissions = (
-            Submission.objects
-            .filter(job_id=pk)
-            .order_by("-submitted_at")
-        )
+        review_stage, include_hired = _parse_submission_history_filters(request)
+        submissions = _job_submission_queryset(pk, review_stage=review_stage, include_hired=include_hired)
         serialized = SubmissionSerializer(submissions, many=True).data
 
         existing_names = {
@@ -1042,10 +1068,11 @@ class JobSubmissionsView(APIView):
         }
 
         media_entries = []
+        include_media_entries = not review_stage or review_stage == Submission.ReviewStage.APPLIED
         media_root = Path(getattr(settings, "MEDIA_ROOT", ""))
         resumes_dir = media_root / "resumes"
 
-        if resumes_dir.exists() and resumes_dir.is_dir():
+        if include_media_entries and resumes_dir.exists() and resumes_dir.is_dir():
             media_files = [
                 p for p in resumes_dir.rglob("*")
                 if p.is_file() and p.suffix.lower() in {".pdf", ".txt"}
@@ -1193,7 +1220,8 @@ class JobCVRankingView(APIView):
     permission_classes = [IsHRManager]
 
     def get(self, request, pk):
-        results = rank_cvs_for_job(pk)
+        review_stage, include_hired = _parse_submission_history_filters(request)
+        results = rank_cvs_for_job(pk, review_stage=review_stage, include_hired=include_hired)
         if "error" in results:
             return Response({"detail": results["error"]}, status=status.HTTP_400_BAD_REQUEST)
         return Response(results)

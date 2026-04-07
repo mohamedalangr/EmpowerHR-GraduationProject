@@ -422,7 +422,15 @@ export const hrGetJobPipelineHealth = () => api.get('/recruitment/jobs/health/')
 export const createJob         = (data)    => api.post('/recruitment/jobs/', data);
 export const updateJob         = (id, data)=> api.put(`/recruitment/jobs/${id}/`, data);
 export const updateJobWeights  = (id, data)=> api.put(`/recruitment/jobs/${id}/weights/`, data);
-export const getJobSubmissions = async (jobId)   => toList(await api.get(`/recruitment/jobs/${jobId}/submissions/`));
+export const getJobSubmissions = async (jobId, filters = {}) => {
+  const params = new URLSearchParams();
+  if (filters.reviewStage) params.append('review_stage', String(filters.reviewStage).trim());
+  if (filters.includeHired !== undefined && filters.includeHired !== null) {
+    params.append('include_hired', filters.includeHired ? '1' : '0');
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
+  return toList(await api.get(`/recruitment/jobs/${jobId}/submissions/${query}`));
+};
 export const getCandidateApplications = async (filters = {}) => {
   const normalized = typeof filters === 'string' ? { email: filters } : (filters || {});
   const params = new URLSearchParams();

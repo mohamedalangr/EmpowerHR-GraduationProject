@@ -26,6 +26,7 @@ export function HRCVRankingPage() {
   const [rankPhase, setRankPhase] = useState('idle');
   const [stageDrafts, setStageDrafts] = useState({});
   const [stageSavingId, setStageSavingId] = useState(null);
+  const [submissionStageFilter, setSubmissionStageFilter] = useState('active');
 
   const topCandidate = rankings.length > 0 ? rankings[0] : null;
   const pipelineCandidates = submissions.filter((submission) => submission.status !== 'MEDIA');
@@ -56,6 +57,13 @@ export function HRCVRankingPage() {
         [key]: value,
       },
     }));
+  };
+
+  const handleSubmissionFilterChange = (nextFilter) => {
+    setSubmissionStageFilter(nextFilter);
+    if (selectedJob?.id) {
+      loadSubmissions(selectedJob.id, nextFilter);
+    }
   };
 
   const getFitBand = (score = 0) => {
@@ -248,9 +256,19 @@ export function HRCVRankingPage() {
     setLoading(false);
   };
 
-  const loadSubmissions = async (jobId) => {
+  const loadSubmissions = async (jobId, stageFilter = submissionStageFilter) => {
     try {
-      const data = await getJobSubmissions(jobId);
+      const filters = {};
+      if (stageFilter === 'all') {
+        filters.includeHired = true;
+      } else if (stageFilter === 'active') {
+        filters.includeHired = false;
+      } else {
+        filters.reviewStage = stageFilter;
+        filters.includeHired = true;
+      }
+
+      const data = await getJobSubmissions(jobId, filters);
       setSubmissions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load submissions:', err);
@@ -325,7 +343,7 @@ export function HRCVRankingPage() {
       } else {
         toast('Candidate stage updated', 'success');
       }
-      await loadSubmissions(selectedJob.id);
+      await loadSubmissions(selectedJob.id, submissionStageFilter);
     } catch (err) {
       toast(err.message || 'Failed to update stage', 'error');
     }
@@ -387,8 +405,9 @@ export function HRCVRankingPage() {
               setSourceFilter('all');
               setSearchTerm('');
               setSortBy('overall');
+              setSubmissionStageFilter('active');
               if (job) {
-                loadSubmissions(job.id);
+                loadSubmissions(job.id, 'active');
               } else {
                 setSubmissions([]);
               }
@@ -995,17 +1014,39 @@ export function HRCVRankingPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <div>
               <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--gray-900)', margin: 0 }}>
-                {t('Candidate CV Library')} ({submissions.length})
+                {t('Candidate Application & CV History')} ({submissions.length})
               </h3>
-              <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: '4px 0 0 0' }}>
-                {t('Supporting list of submitted and media CVs used in ranking.')}
+              <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: '4px 0 0 0', maxWidth: 640 }}>
+                {submissionStageFilter === 'active'
+                  ? t('Only candidates who are not yet hired appear by default. Use the filter to review shortlisted, rejected, or hired history with full details.')
+                  : t('Review the stored application history, status timeline, and notes for this job.')}
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <Badge color="gray" label={`${t('Applied')} ${pipelineCandidates.filter((item) => item.review_stage === 'Applied').length}`} />
-              <Badge color="yellow" label={`${t('Shortlisted')} ${pipelineCandidates.filter((item) => item.review_stage === 'Shortlisted').length}`} />
-              <Badge color="accent" label={`${t('Interview')} ${pipelineCandidates.filter((item) => item.review_stage === 'Interview').length}`} />
-              <Badge color="green" label={`${t('Hired')} ${pipelineCandidates.filter((item) => item.review_stage === 'Hired').length}`} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-600)', textTransform: 'uppercase', letterSpacing: '.08em' }}>
+                  {t('Application Status View')}
+                </span>
+                <select
+                  value={submissionStageFilter}
+                  onChange={(e) => handleSubmissionFilterChange(e.target.value)}
+                  style={{ minWidth: 190, padding: '10px 12px', border: '1px solid #D0D5DD', borderRadius: 10, fontSize: 12.5, background: '#fff', outline: 'none' }}
+                >
+                  <option value="active">{t('Active Pipeline')}</option>
+                  <option value="all">{t('All Applications')}</option>
+                  <option value="Applied">{t('Applied')}</option>
+                  <option value="Shortlisted">{t('Shortlisted')}</option>
+                  <option value="Interview">{t('Interview')}</option>
+                  <option value="Hired">{t('Hired')}</option>
+                  <option value="Rejected">{t('Rejected')}</option>
+                </select>
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge color="gray" label={`${t('Applied')} ${pipelineCandidates.filter((item) => item.review_stage === 'Applied').length}`} />
+                <Badge color="yellow" label={`${t('Shortlisted')} ${pipelineCandidates.filter((item) => item.review_stage === 'Shortlisted').length}`} />
+                <Badge color="accent" label={`${t('Interview')} ${pipelineCandidates.filter((item) => item.review_stage === 'Interview').length}`} />
+                <Badge color="green" label={`${t('Hired')} ${pipelineCandidates.filter((item) => item.review_stage === 'Hired').length}`} />
+              </div>
             </div>
           </div>
 
@@ -1015,8 +1056,8 @@ export function HRCVRankingPage() {
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14,2 14,8 20,8"/>
               </svg>
-              <p style={{ fontSize: 14, color: 'var(--gray-500)', fontWeight: 600, marginBottom: 4 }}>{t('No CV records available')}</p>
-              <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>{t('Once CVs are submitted or detected in media, they will appear here.')}</p>
+              <p style={{ fontSize: 14, color: 'var(--gray-500)', fontWeight: 600, marginBottom: 4 }}>{t('No applications found for this status filter')}</p>
+              <p style={{ fontSize: 12, color: 'var(--gray-400)' }}>{t('Try switching the application status view to review other candidate history records.')}</p>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
@@ -1087,7 +1128,13 @@ export function HRCVRankingPage() {
                     </div>
                   ) : null}
 
-                  {submission.status !== 'MEDIA' && (
+                  {submission.status !== 'MEDIA' && submission.review_stage === 'Hired' ? (
+                    <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 12, background: '#ECFDF3', border: '1px solid #ABEFC6', fontSize: 12, color: '#067647', fontWeight: 600 }}>
+                      {t('This candidate has been hired and moved into the stored application history for this job. Their profile remains saved with the full status timeline and employee link.')}
+                    </div>
+                  ) : null}
+
+                  {submission.status !== 'MEDIA' && submission.review_stage !== 'Hired' && (
                     <div style={{ marginBottom: 12, display: 'grid', gap: 8 }}>
                       <select
                         value={stageDrafts[submission.id]?.review_stage || submission.review_stage || 'Applied'}

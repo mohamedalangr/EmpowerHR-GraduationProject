@@ -298,6 +298,71 @@ class RecruitmentPublicFlowTests(TestCase):
         self.assertEqual(history_entry.newRole, 'TeamMember')
         self.assertIn('Candidate hired from recruitment pipeline', history_entry.notes)
 
+    def test_hr_job_submissions_hide_hired_candidates_from_active_list_by_default(self):
+        Submission.objects.create(
+            job=self.job,
+            candidate_name='Active Pipeline',
+            candidate_email='active.pipeline@test.com',
+            resume_file=SimpleUploadedFile('active.txt', b'React and CSS profile', content_type='text/plain'),
+            review_stage='Interview',
+            stage_notes='Interview scheduled.',
+            talent_pool=True,
+            status=Submission.Status.DONE,
+        )
+        Submission.objects.create(
+            job=self.job,
+            candidate_name='Hired History',
+            candidate_email='hired.history@test.com',
+            resume_file=SimpleUploadedFile('history.txt', b'React and leadership profile', content_type='text/plain'),
+            review_stage='Hired',
+            stage_notes='Approved and moved to onboarding.',
+            talent_pool=False,
+            status=Submission.Status.DONE,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get(f'/api/recruitment/jobs/{self.job.id}/submissions/')
+
+        self.assertEqual(response.status_code, 200)
+        returned_emails = {
+            item['candidate_email']
+            for item in response.data
+            if item.get('status') != 'MEDIA'
+        }
+        self.assertIn('active.pipeline@test.com', returned_emails)
+        self.assertNotIn('hired.history@test.com', returned_emails)
+
+    def test_hr_can_filter_job_submissions_by_review_stage_for_candidate_history(self):
+        Submission.objects.create(
+            job=self.job,
+            candidate_name='Shortlisted Profile',
+            candidate_email='shortlisted.profile@test.com',
+            resume_file=SimpleUploadedFile('shortlisted.txt', b'React and product collaboration', content_type='text/plain'),
+            review_stage='Shortlisted',
+            stage_notes='Strong shortlist for panel review.',
+            talent_pool=True,
+            status=Submission.Status.DONE,
+        )
+        Submission.objects.create(
+            job=self.job,
+            candidate_name='Hired History',
+            candidate_email='hired.history@test.com',
+            resume_file=SimpleUploadedFile('history.txt', b'React and leadership profile', content_type='text/plain'),
+            review_stage='Hired',
+            stage_notes='Approved and moved to onboarding.',
+            talent_pool=False,
+            status=Submission.Status.DONE,
+        )
+
+        self.client.force_authenticate(user=self.hr_user)
+        response = self.client.get(f'/api/recruitment/jobs/{self.job.id}/submissions/?review_stage=Hired&include_hired=1')
+
+        self.assertEqual(response.status_code, 200)
+        history_rows = [item for item in response.data if item.get('status') != 'MEDIA']
+        self.assertEqual(len(history_rows), 1)
+        self.assertEqual(history_rows[0]['candidate_email'], 'hired.history@test.com')
+        self.assertEqual(history_rows[0]['review_stage'], 'Hired')
+
     def test_hr_cannot_skip_hiring_stages_or_reject_without_reason(self):
         submission = Submission.objects.create(
             job=self.job,
