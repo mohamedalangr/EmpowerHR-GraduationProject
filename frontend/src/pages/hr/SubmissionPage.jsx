@@ -34,29 +34,68 @@ export function HRSubmissionPage() {
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
-    hrGetForms().then(data => {
-      const f = Array.isArray(data) ? data : [];
-      setForms(f);
-      if (f.length > 0) setSelected(f[0].formID);
-    });
+    let cancelled = false;
+    setLoading(true);
+
+    hrGetForms()
+      .then((data) => {
+        if (cancelled) return;
+        const f = Array.isArray(data) ? data : [];
+        setForms(f);
+
+        if (f.length > 0) {
+          setSelected(f[0].formID);
+        } else {
+          setSelected('');
+          setSubmissions([]);
+          setInsights(EMPTY_INSIGHTS);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setForms([]);
+        setSelected('');
+        setSubmissions([]);
+        setInsights(EMPTY_INSIGHTS);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    if (!selectedForm) return;
+    if (!selectedForm) {
+      if (forms.length === 0) setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     setLoading(true);
+
     Promise.all([
       hrGetSubmissions(selectedForm),
       hrGetSubmissionInsights(selectedForm).catch(() => EMPTY_INSIGHTS),
-    ]).then(([data, insightData]) => {
-      setSubmissions(Array.isArray(data) ? data : []);
-      setInsights(insightData && typeof insightData === 'object' ? insightData : EMPTY_INSIGHTS);
-      setLoading(false);
-    }).catch(() => {
-      setSubmissions([]);
-      setInsights(EMPTY_INSIGHTS);
-      setLoading(false);
-    });
-  }, [selectedForm]);
+    ])
+      .then(([data, insightData]) => {
+        if (cancelled) return;
+        setSubmissions(Array.isArray(data) ? data : []);
+        setInsights(insightData && typeof insightData === 'object' ? insightData : EMPTY_INSIGHTS);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSubmissions([]);
+        setInsights(EMPTY_INSIGHTS);
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedForm, forms.length]);
 
   const filteredSubmissions = useMemo(() => {
     const search = searchTerm.trim().toLowerCase();
@@ -271,6 +310,10 @@ export function HRSubmissionPage() {
       {/* Table */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 80 }}><Spinner /></div>
+      ) : forms.length === 0 ? (
+        <div className="hr-soft-empty" style={{ textAlign: 'center', padding: '64px 32px' }}>
+          <p style={{ fontSize: 13, color: 'var(--gray-300)', fontWeight: 500 }}>{t('No feedback forms exist yet. Create a form first, then submissions will appear here.')}</p>
+        </div>
       ) : submissions.length === 0 ? (
         <div className="hr-soft-empty" style={{ textAlign: 'center', padding: '64px 32px' }}>
           <p style={{ fontSize: 13, color: 'var(--gray-300)', fontWeight: 500 }}>{t('No submissions for this form yet.')}</p>
