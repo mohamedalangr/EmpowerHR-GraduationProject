@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { AuthProvider } from "./context/AuthContext";
 import { LanguageProvider } from "./context/LanguageContext";
 import { ProtectedRoute, RoleRoute } from "./routes/Guards";
@@ -195,6 +196,7 @@ export default function App() {
           </Routes>
         </AuthProvider>
       </LanguageProvider>
+      <Analytics />
     </BrowserRouter>
   );
 }
