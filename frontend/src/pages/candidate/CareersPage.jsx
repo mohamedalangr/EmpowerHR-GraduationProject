@@ -6,6 +6,24 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
 const APPLICATION_STAGES = ['Applied', 'Shortlisted', 'Interview', 'Hired'];
+const CANDIDATE_TRIP_STOPS = [
+  {
+    title: 'Discover roles',
+    copy: 'Explore the live feed and spot openings that match your direction.',
+  },
+  {
+    title: 'Focus your fit',
+    copy: 'Use role signals, skills, and experience cues to narrow down the best options.',
+  },
+  {
+    title: 'Apply with confidence',
+    copy: 'Send your CV in a quick, clean flow designed to keep the momentum easy.',
+  },
+  {
+    title: 'Track every move',
+    copy: 'Stay close to shortlists, interviews, and recruiter notes from one place.',
+  },
+];
 
 const formatApplicationDate = (value) => {
   if (!value) return '';
@@ -41,6 +59,37 @@ const getStageTone = (stage) => {
   return 'slate';
 };
 
+const getRoleTagline = (job) => {
+  const skillsCount = (job?.required_skills || []).length;
+  const experience = Number(job?.min_experience_years || 0);
+
+  if (skillsCount >= 6) return 'A rich, skill-forward role for candidates who enjoy variety and visible impact.';
+  if (experience <= 2) return 'A smooth path for candidates building confidence and early-career momentum.';
+  if (experience >= 5) return 'A more strategic role for experienced candidates ready to guide bigger outcomes.';
+  return 'A balanced opportunity with clear expectations, growth space, and a candidate-friendly path.';
+};
+
+const getCandidateVibe = (job) => {
+  const experience = Number(job?.min_experience_years || 0);
+  const skillsCount = (job?.required_skills || []).length;
+
+  if (experience <= 2) return 'Quick Start';
+  if (experience >= 5) return 'Leadership Track';
+  if (skillsCount >= 5) return 'Skill-Rich';
+  return 'Growth Path';
+};
+
+const getRoleHighlights = (job) => {
+  const experience = Number(job?.min_experience_years || 0);
+  const skillsCount = (job?.required_skills || []).length;
+
+  return [
+    skillsCount ? `${skillsCount} skill signals in the role` : 'Flexible skill mix',
+    `${experience}+ year${experience === 1 ? '' : 's'} experience focus`,
+    job?.required_degree ? `${job.required_degree} degree path` : 'Open degree path',
+  ];
+};
+
 export function EmployeeCareersPage() {
   const { user } = useAuth();
   const location = useLocation();
@@ -58,6 +107,8 @@ export function EmployeeCareersPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
+  const [browseVibe, setBrowseVibe] = useState('all');
+  const [activeDepartment, setActiveDepartment] = useState('all');
   const [showApply, setShowApply] = useState(false);
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -83,12 +134,27 @@ export function EmployeeCareersPage() {
       ? t('Stay close to new openings, application momentum, and interview preparation from one place.')
       : t('page.careers.subtitle');
 
-  const filtered = jobs.filter((job) =>
-    job.title?.toLowerCase().includes(search.toLowerCase()) ||
-    (job.department || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = jobs.filter((job) => {
+    const normalizedSearch = search.trim().toLowerCase();
+    const title = (job.title || '').toLowerCase();
+    const department = (job.department || 'General').toLowerCase();
+    const skills = (job.required_skills || []).join(' ').toLowerCase();
+    const experience = Number(job.min_experience_years || 0);
+    const skillsCount = (job.required_skills || []).length;
+
+    const matchesSearch = !normalizedSearch || title.includes(normalizedSearch) || department.includes(normalizedSearch) || skills.includes(normalizedSearch);
+    const matchesDepartment = activeDepartment === 'all' || (job.department || 'General') === activeDepartment;
+    const matchesVibe = browseVibe === 'all'
+      || (browseVibe === 'starter' && experience <= 2)
+      || (browseVibe === 'growth' && experience > 2 && experience < 5)
+      || (browseVibe === 'lead' && experience >= 5)
+      || (browseVibe === 'skill-rich' && skillsCount >= 5);
+
+    return matchesSearch && matchesDepartment && matchesVibe;
+  });
 
   const featuredJob = selected || filtered[0] || jobs[0] || null;
+  const departmentFilters = useMemo(() => ['all', ...new Set(jobs.map((job) => job.department || 'General'))].slice(0, 6), [jobs]);
   const activeApplications = applications.filter((item) => !['Hired', 'Rejected'].includes(item.review_stage)).length;
   const interviewApplications = applications.filter((item) => item.review_stage === 'Interview').length;
   const closedApplications = applications.filter((item) => ['Hired', 'Rejected'].includes(item.review_stage)).length;
@@ -136,6 +202,53 @@ export function EmployeeCareersPage() {
         updatedAt: formatApplicationDate(item.stage_updated_at || item.submitted_at) || t('N/A'),
       }))
   ), [applications, t]);
+
+  const journeyStepIndex = latestApplication
+    ? 3
+    : selected || search.trim()
+      ? 1
+      : 0;
+
+  const candidateFeed = useMemo(() => {
+    const items = [];
+
+    if (featuredJob) {
+      items.push({
+        eyebrow: 'Role spotlight',
+        title: featuredJob.title,
+        copy: `${getRoleTagline(featuredJob)} ${featuredJob.required_skills?.length ? `Top skills: ${(featuredJob.required_skills || []).slice(0, 3).join(', ')}.` : ''}`,
+        tone: 'var(--red)',
+      });
+    }
+
+    if (roleSignals.topSkills.length) {
+      const [skill, count] = roleSignals.topSkills[0];
+      items.push({
+        eyebrow: 'Skill pulse',
+        title: `${skill} is trending`,
+        copy: `Appears in ${count} visible role${count === 1 ? '' : 's'} right now — highlight it clearly in your CV if it fits your story.`,
+        tone: '#175CD3',
+      });
+    }
+
+    if (latestApplication) {
+      items.push({
+        eyebrow: 'Latest move',
+        title: `${latestApplication.job_title || t('Application')} · ${t(latestApplication.review_stage || 'Applied')}`,
+        copy: getApplicationGuidance(latestApplication.review_stage || 'Applied'),
+        tone: '#12B76A',
+      });
+    } else {
+      items.push({
+        eyebrow: 'Next best move',
+        title: 'Start with one role that feels close to your strengths',
+        copy: 'Open a job card, scan the required skills, and use the quick apply flow when the fit feels right.',
+        tone: '#F59E0B',
+      });
+    }
+
+    return items.slice(0, 3);
+  }, [featuredJob, latestApplication, roleSignals, t]);
 
   const loadApplications = async (emailToLookup = trackingEmail, options = {}) => {
     const { silent = false, codeToLookup = trackingCode } = options;
@@ -266,6 +379,11 @@ export function EmployeeCareersPage() {
               {t('Track My Applications')}
             </Btn>
           </div>
+          <div className="candidate-hero-quickfacts">
+            {[t('Quick apply flow'), t('Live application tracker'), t('Fresh opportunity feed')].map((item) => (
+              <span key={item} className="candidate-hero-pill">{item}</span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -284,6 +402,39 @@ export function EmployeeCareersPage() {
             <Badge color="accent" label={searchSummary} />
           </div>
 
+          <div className="candidate-journey-strip">
+            <div className="candidate-journey-panel">
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{t('Your candidate trip')}</div>
+              <div className="candidate-trip-steps">
+                {CANDIDATE_TRIP_STOPS.map((stop, index) => (
+                  <div
+                    key={stop.title}
+                    className={`candidate-trip-step ${index === journeyStepIndex ? 'is-active' : index < journeyStepIndex ? 'is-complete' : ''}`}
+                  >
+                    <div className="candidate-trip-step-index">{index + 1}</div>
+                    <div>
+                      <div className="candidate-trip-step-title">{t(stop.title)}</div>
+                      <div className="candidate-trip-step-copy">{t(stop.copy)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="candidate-feed-panel">
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{t('Career Feed')}</div>
+              <div className="candidate-feed-list">
+                {candidateFeed.map((item) => (
+                  <div key={`${item.eyebrow}-${item.title}`} className="candidate-feed-item">
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: item.tone, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{t(item.eyebrow)}</div>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 4 }}>{t(item.title)}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', lineHeight: 1.55 }}>{t(item.copy)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <div className="hr-stats-grid" style={{ marginBottom: 18 }}>
             {[
               [t('Live Openings'), jobs.length, 'var(--red-light)'],
@@ -298,7 +449,7 @@ export function EmployeeCareersPage() {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
             <div style={{ border: '1px solid #E7EAEE', borderRadius: 18, padding: '14px 16px', background: '#fff' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>{t('Role Match Radar')}</div>
               <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--gray-500)' }}>{t('Spot the hottest departments and most requested skills before you apply.')}</p>
@@ -314,7 +465,7 @@ export function EmployeeCareersPage() {
                 </div>
               </div>
 
-              <div style={{ marginBottom: 12 }}>
+              <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6 }}>{t('Skill demand')}</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {roleSignals.topSkills.length
@@ -324,13 +475,18 @@ export function EmployeeCareersPage() {
                     : <span style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No roles match your current search.')}</span>}
                 </div>
               </div>
+            </div>
 
-              <div style={{ padding: '10px 12px', borderRadius: 14, background: '#F8FAFC', border: '1px solid #E7EAEE' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{t('Featured Role')}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-900)' }}>{featuredJob?.title || t('Explore your next opportunity')}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
-                  {featuredJob ? `${featuredJob.department || t('General role')} • ${featuredJob.min_experience_years || 0}+ ${t('yrs')}` : t('Start your application journey')}
-                </div>
+            <div style={{ border: '1px solid #E7EAEE', borderRadius: 18, padding: '14px 16px', background: '#fff' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>{t('Role Preview')}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 6 }}>{featuredJob?.title || t('Explore your next opportunity')}</div>
+              <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--gray-600)', lineHeight: 1.55 }}>{t(featuredJob ? getRoleTagline(featuredJob) : 'Use the role feed to discover an opening that feels clear and exciting to you.')}</p>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {(featuredJob ? getRoleHighlights(featuredJob) : ['Skill-first role feed', 'Clean apply flow', 'Live tracker updates']).map((item) => (
+                  <div key={item} style={{ padding: '9px 10px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E7EAEE', fontSize: 12.5, color: 'var(--gray-700)' }}>
+                    {t(item)}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -551,13 +707,55 @@ export function EmployeeCareersPage() {
 
       <div className="careers-layout">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>{loading ? t('common.loading') : `${filtered.length} ${t('Open Positions')}`}</div>
               <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{searchSummary}</div>
             </div>
-            {search.trim() ? <Btn variant="ghost" onClick={() => setSearch('')}>{t('Clear Search')}</Btn> : null}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {search.trim() ? <Btn variant="ghost" onClick={() => setSearch('')}>{t('Clear Search')}</Btn> : null}
+              {(browseVibe !== 'all' || activeDepartment !== 'all') ? (
+                <Btn variant="ghost" onClick={() => { setBrowseVibe('all'); setActiveDepartment('all'); }}>
+                  {t('Reset Filters')}
+                </Btn>
+              ) : null}
+            </div>
           </div>
+
+          <div className="candidate-filter-group">
+            <div className="candidate-filter-row">
+              {[
+                ['all', 'All journeys'],
+                ['starter', 'Quick Start'],
+                ['growth', 'Growth Path'],
+                ['skill-rich', 'Skill-Rich'],
+                ['lead', 'Leadership Track'],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`candidate-filter-chip ${browseVibe === value ? 'is-active' : ''}`}
+                  onClick={() => setBrowseVibe(value)}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
+
+            <div className="candidate-filter-row">
+              {departmentFilters.map((department) => (
+                <button
+                  key={department}
+                  type="button"
+                  className={`candidate-filter-chip ${activeDepartment === department ? 'is-active' : ''}`}
+                  onClick={() => setActiveDepartment(department)}
+                >
+                  {department === 'all' ? t('All departments') : t(department)}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {loading ? <div style={{ textAlign: 'center', padding: 80 }}><Spinner /></div> : filtered.length === 0 ? (
             <div className="hr-soft-empty" style={{ textAlign: 'center', padding: '48px 28px' }}>
               <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 6 }}>{t('No roles match your current search.')}</p>
@@ -588,30 +786,43 @@ export function EmployeeCareersPage() {
                     }
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, gap: 12 }}>
                     <div>
                       <div style={{ fontSize: 17, fontWeight: 700 }}>{job.title}</div>
-                      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.1em', marginTop: 4 }}>{t(job.department || 'General')}</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                        <Badge color="accent" label={t(getCandidateVibe(job))} />
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.1em' }}>{t(job.department || 'General')}</span>
+                      </div>
                     </div>
                     <div style={{ width: 32, height: 32, background: 'var(--gray-100)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="16" height="16" fill="none" stroke="var(--gray-400)" strokeWidth="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" /></svg>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-                    {[[t('Remote'), 'Remote'], [`${job.min_experience_years || 0}+ ${t('yrs')}`, 'Experience']].map(([value]) => (
+
+                  <div className="careers-job-teaser">{t(getRoleTagline(job))}</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                    {[[t('Remote-friendly workflow')], [`${job.min_experience_years || 0}+ ${t('yrs')} ${t('experience')}`]].map(([value]) => (
                       <div key={value} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--gray-500)', fontWeight: 500 }}>
                         <svg width="14" height="14" fill="none" stroke="var(--gray-300)" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
                         {value}
                       </div>
                     ))}
                   </div>
+
+                  <div className="careers-job-highlight-list">
+                    {getRoleHighlights(job).map((item) => (
+                      <div key={`${job.id}-${item}`} className="careers-job-highlight">{t(item)}</div>
+                    ))}
+                  </div>
+
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
-                    {(job.required_skills || []).slice(0, 3).map((skill) => (
+                    {(job.required_skills || []).slice(0, 4).map((skill) => (
                       <Badge key={`${job.id}-${skill}`} color="slate" label={skill} />
                     ))}
                     {(job.required_skills || []).length === 0 ? <Badge color="slate" label={t('General role')} /> : null}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 18, borderTop: '1px solid #F3F4F6' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 18, borderTop: '1px solid #F3F4F6', gap: 8, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{t('Req.')} {job.min_experience_years || 0}+ {t('yrs')}</span>
                     <Btn size="sm" onClick={(e) => { e.stopPropagation(); setSelected(job); setShowApply(true); setResult(null); setFile(null); }}>{t('Apply Now')}</Btn>
                   </div>
@@ -663,6 +874,21 @@ export function EmployeeCareersPage() {
                   <Badge key={`selected-${skill}`} color="slate" label={skill} />
                 )) : <Badge color="slate" label={t('General role')} />}
               </div>
+
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{t('Why this role can feel exciting')}</div>
+              <div className="candidate-sidebar-list">
+                {getRoleHighlights(selected).map((item) => (
+                  <div key={`sidebar-${item}`} className="candidate-sidebar-item">{t(item)}</div>
+                ))}
+              </div>
+
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>{t('Quick apply checklist')}</div>
+              <div className="candidate-sidebar-list" style={{ marginBottom: 18 }}>
+                {[t('Tailor your CV to the highlighted skills'), t('Keep your email active for updates'), t('Track progress after submitting')].map((item) => (
+                  <div key={item} className="candidate-sidebar-item">{item}</div>
+                ))}
+              </div>
+
               <Btn onClick={() => { setShowApply(true); setResult(null); setFile(null); }} style={{ width: '100%', padding: 15 }}>
                 {t('Apply Now')}
                 <svg width="16" height="16" fill="none" stroke="#fff" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>
@@ -715,6 +941,18 @@ export function EmployeeCareersPage() {
             <div style={{ marginBottom: 16, fontSize: 12.5, color: 'var(--gray-500)' }}>
               {t('You can apply publicly without logging in. HR will review your application after submission.')}
             </div>
+            {selected ? (
+              <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 16, background: '#F8FAFC', border: '1px solid #E7EAEE' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{t('Before you hit apply')}</div>
+                <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--gray-900)', marginBottom: 4 }}>{selected.title}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--gray-600)', lineHeight: 1.55, marginBottom: 8 }}>{t(getRoleTagline(selected))}</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {getRoleHighlights(selected).map((item) => (
+                    <Badge key={`apply-${item}`} color="slate" label={t(item)} />
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <input
                 type="text"
