@@ -16,6 +16,12 @@ class AttritionPredictionSerializer(serializers.ModelSerializer):
     explanationSummary = serializers.SerializerMethodField()
     riskDrivers = serializers.SerializerMethodField()
     recommendedActions = serializers.SerializerMethodField()
+    basedOnFeedback = serializers.SerializerMethodField()
+    feedbackSummary = serializers.SerializerMethodField()
+    feedbackSignals = serializers.SerializerMethodField()
+    mainRiskPoints = serializers.SerializerMethodField()
+    hrActionPlan = serializers.SerializerMethodField()
+    adminActionPlan = serializers.SerializerMethodField()
     confidenceLabel = serializers.SerializerMethodField()
     decisionSupportOnly = serializers.SerializerMethodField()
     neutralizedProtectedFields = serializers.SerializerMethodField()
@@ -34,6 +40,12 @@ class AttritionPredictionSerializer(serializers.ModelSerializer):
             'department',
             'riskScore',
             'riskLevel',
+            'basedOnFeedback',
+            'feedbackSummary',
+            'feedbackSignals',
+            'mainRiskPoints',
+            'hrActionPlan',
+            'adminActionPlan',
             'confidenceScore',
             'confidenceLabel',
             'predictionSource',
@@ -91,6 +103,24 @@ class AttritionPredictionSerializer(serializers.ModelSerializer):
 
     def get_recommendedActions(self, obj):
         return self._get_prediction_package(obj)['recommendedActions']
+
+    def get_basedOnFeedback(self, obj):
+        return self._get_prediction_package(obj)['basedOnFeedback']
+
+    def get_feedbackSummary(self, obj):
+        return self._get_prediction_package(obj)['feedbackSummary']
+
+    def get_feedbackSignals(self, obj):
+        return self._get_prediction_package(obj)['feedbackSignals']
+
+    def get_mainRiskPoints(self, obj):
+        return self._get_prediction_package(obj)['mainRiskPoints']
+
+    def get_hrActionPlan(self, obj):
+        return self._get_prediction_package(obj)['hrActionPlan']
+
+    def get_adminActionPlan(self, obj):
+        return self._get_prediction_package(obj)['adminActionPlan']
 
     def get_confidenceLabel(self, obj):
         return self._get_prediction_package(obj)['confidenceLabel']

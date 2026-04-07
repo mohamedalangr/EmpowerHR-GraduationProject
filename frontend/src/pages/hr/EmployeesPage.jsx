@@ -840,15 +840,31 @@ export function HREmployeesPage() {
                 <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 10 }}>{t('AI Retention Outlook')}</div>
                 {snapshot.attrition ? (
                   <>
-                    <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--gray-700)', lineHeight: 1.6 }}>{t(snapshot.attrition.explanationSummary || '')}</p>
+                    <p style={{ margin: '0 0 8px', fontSize: 13.5, color: 'var(--gray-700)', lineHeight: 1.6 }}>{t(snapshot.attrition.explanationSummary || '')}</p>
+                    <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--gray-500)', lineHeight: 1.5 }}>{t(snapshot.attrition.feedbackSummary || '')}</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                       {(snapshot.attrition.riskDrivers || []).slice(0, 3).map((driver, index) => (
                         <Badge key={`${driver.title}-${index}`} label={t(driver.title)} color={riskColor(driver.severity === 'high' ? 'High' : driver.severity === 'medium' ? 'Medium' : 'Low')} />
                       ))}
                     </div>
-                    <ul style={{ margin: 0, paddingInlineStart: 18, display: 'grid', gap: 6, fontSize: 13, color: 'var(--gray-700)' }}>
-                      {(snapshot.attrition.recommendedActions || []).slice(0, 3).map((action, index) => <li key={`${action}-${index}`}>{t(action)}</li>)}
+                    <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{t('Main Risk Points')}</div>
+                    <ul style={{ margin: '0 0 12px', paddingInlineStart: 18, display: 'grid', gap: 6, fontSize: 13, color: 'var(--gray-700)' }}>
+                      {(snapshot.attrition.mainRiskPoints || []).slice(0, 3).map((point, index) => <li key={`${point}-${index}`}>{t(point)}</li>)}
                     </ul>
+                    <div className="hr-panel-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{t('HR Action Plan')}</div>
+                        <ul style={{ margin: 0, paddingInlineStart: 18, display: 'grid', gap: 6, fontSize: 12.5, color: 'var(--gray-700)' }}>
+                          {(snapshot.attrition.hrActionPlan || snapshot.attrition.recommendedActions || []).slice(0, 3).map((action, index) => <li key={`hr-${action}-${index}`}>{t(action)}</li>)}
+                        </ul>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{t('Admin Action Plan')}</div>
+                        <ul style={{ margin: 0, paddingInlineStart: 18, display: 'grid', gap: 6, fontSize: 12.5, color: 'var(--gray-700)' }}>
+                          {(snapshot.attrition.adminActionPlan || []).slice(0, 3).map((action, index) => <li key={`admin-${action}-${index}`}>{t(action)}</li>)}
+                        </ul>
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <p style={{ margin: 0, fontSize: 13.5, color: 'var(--gray-500)' }}>{t('No attrition prediction has been run for this employee yet.')}</p>

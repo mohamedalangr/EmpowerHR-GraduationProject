@@ -1426,9 +1426,19 @@ class AttritionExplainabilityTests(TestCase):
         self.assertIn('modelVersion', prediction)
         self.assertIn('decisionSupportOnly', prediction)
         self.assertIn('neutralizedProtectedFields', prediction)
+        self.assertIn('basedOnFeedback', prediction)
+        self.assertIn('feedbackSignals', prediction)
+        self.assertIn('mainRiskPoints', prediction)
+        self.assertIn('hrActionPlan', prediction)
+        self.assertIn('adminActionPlan', prediction)
         self.assertTrue(len(prediction['riskDrivers']) >= 1)
         self.assertTrue(len(prediction['recommendedActions']) >= 1)
+        self.assertTrue(len(prediction['feedbackSignals']) >= 1)
+        self.assertTrue(len(prediction['mainRiskPoints']) >= 1)
+        self.assertTrue(len(prediction['hrActionPlan']) >= 1)
+        self.assertTrue(len(prediction['adminActionPlan']) >= 1)
         self.assertTrue(prediction['decisionSupportOnly'])
+        self.assertTrue(prediction['basedOnFeedback'])
         self.assertIn('Age', prediction['neutralizedProtectedFields'])
 
         latest_response = self.client.get(reverse('attrition-latest'))
@@ -1436,6 +1446,7 @@ class AttritionExplainabilityTests(TestCase):
         self.assertIn('explanationSummary', latest_response.data[0])
         self.assertIn('recommendedActions', latest_response.data[0])
         self.assertIn('confidenceLabel', latest_response.data[0])
+        self.assertIn('mainRiskPoints', latest_response.data[0])
 
 
 class AttendanceLeaveTests(TestCase):

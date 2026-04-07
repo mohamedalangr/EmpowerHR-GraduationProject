@@ -121,6 +121,41 @@ def collect_answer_signals(answers_qs):
     }
 
 
+FEEDBACK_SIGNAL_LABELS = {
+    'work_life_balance': 'Work-Life Balance',
+    'job_satisfaction': 'Job Satisfaction',
+    'distance_from_home': 'Distance from Home',
+    'leadership': 'Leadership Opportunities',
+    'innovation': 'Innovation Opportunities',
+    'company_reputation': 'Company Reputation',
+    'employee_recognition': 'Employee Recognition',
+}
+
+
+def _build_feedback_signals(answer_values):
+    signals = []
+    for key, value in answer_values.items():
+        if value is None:
+            continue
+
+        if key == 'distance_from_home':
+            severity = 'high' if value >= 20 else 'medium' if value >= 10 else 'low'
+            summary = f'Employee reported a commute distance of {value:.0f}, which may increase day-to-day friction.'
+        else:
+            severity = 'high' if value <= 1 else 'medium' if value <= 2 else 'low'
+            summary = f'Employee feedback for {FEEDBACK_SIGNAL_LABELS[key].lower()} is {value:.0f}/4.'
+
+        signals.append({
+            'signal': FEEDBACK_SIGNAL_LABELS[key],
+            'value': round(float(value), 2),
+            'severity': severity,
+            'summary': summary,
+        })
+
+    signals.sort(key=lambda item: (SEVERITY_ORDER.get(item['severity'], 0), -item['value'] if item['signal'] == 'Distance from Home' else 0), reverse=True)
+    return signals
+
+
 def build_feature_vector(employee, answers_qs):
     """
     Build a single feature vector (numpy array) from an employee record
@@ -428,10 +463,55 @@ def build_prediction_insights(employee, answers_qs=None, risk_score=None, risk_l
     if missing_fields:
         summary += f" Prediction confidence is slightly reduced because {len(missing_fields)} input field(s) were missing."
 
+    based_on_feedback = any(value is not None for value in answer_values.values())
+    feedback_signals = _build_feedback_signals(answer_values)
+    main_risk_points = [
+        f"{driver['title']}: {driver['detail']}"
+        for driver in top_drivers
+    ]
+
+    hr_action_plan = []
+    admin_action_plan = []
+
+    def add_unique(plan_list, text):
+        if text and text not in plan_list:
+            plan_list.append(text)
+
+    add_unique(hr_action_plan, actions[0] if actions else 'Run a retention check-in with the employee and manager.')
+    if any(driver['title'] == 'Low job satisfaction' for driver in top_drivers):
+        add_unique(hr_action_plan, 'HR should run a stay interview, document blockers, and agree on a 30-day retention plan.')
+        add_unique(admin_action_plan, 'Admin should review role design, compensation fit, and escalation blockers affecting satisfaction in this team.')
+    if any(driver['title'] == 'Low work-life balance' for driver in top_drivers):
+        add_unique(hr_action_plan, 'HR should review workload pressure and manager support with the employee this week.')
+        add_unique(admin_action_plan, 'Admin should assess staffing coverage or workload redistribution to reduce overtime pressure.')
+    if any(driver['title'] == 'Career progression feels stalled' for driver in top_drivers):
+        add_unique(hr_action_plan, 'HR should map a development path with mentoring, promotion criteria, and follow-up milestones.')
+        add_unique(admin_action_plan, 'Admin should review internal mobility and promotion capacity for the affected department.')
+    if any(driver['title'] == 'Recognition feels low' for driver in top_drivers):
+        add_unique(hr_action_plan, 'HR should schedule recognition-focused follow-up with the manager in the next 1:1 cycle.')
+        add_unique(admin_action_plan, 'Admin should strengthen recognition visibility and reward consistency across the team.')
+    if any(driver['title'] == 'Long commute burden' for driver in top_drivers):
+        add_unique(hr_action_plan, 'HR should explore schedule flexibility or hybrid arrangements if the role allows.')
+        add_unique(admin_action_plan, 'Admin should review location flexibility policies and commute-sensitive scheduling options.')
+
+    if not hr_action_plan:
+        add_unique(hr_action_plan, 'HR should monitor this employee in the next feedback cycle and keep a documented follow-up plan.')
+    if not admin_action_plan:
+        add_unique(admin_action_plan, 'Admin should monitor this team’s workload, recognition, and growth signals for broader retention trends.')
+    if missing_fields:
+        add_unique(hr_action_plan, 'Collect the missing employee feedback or profile fields to improve the reliability of the attrition analysis.')
+        add_unique(admin_action_plan, 'Support survey completion and profile data quality so future attrition runs are more reliable.')
+
     return {
         'explanationSummary': summary,
+        'basedOnFeedback': based_on_feedback,
+        'feedbackSummary': 'This prediction is based on the employee\'s completed feedback responses together with current HR profile data.' if based_on_feedback else 'No completed employee feedback answers were available, so the prediction relied more heavily on profile data.',
+        'feedbackSignals': feedback_signals[:5],
+        'mainRiskPoints': main_risk_points,
         'riskDrivers': top_drivers,
         'recommendedActions': actions[:4],
+        'hrActionPlan': hr_action_plan[:4],
+        'adminActionPlan': admin_action_plan[:4],
     }
 
 

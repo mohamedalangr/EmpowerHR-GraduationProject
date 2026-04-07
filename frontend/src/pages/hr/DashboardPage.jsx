@@ -841,9 +841,12 @@ export function HRDashboardPage() {
                     </span>
                   </div>
 
-                  <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--gray-600)', lineHeight: 1.55 }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 13.5, color: 'var(--gray-600)', lineHeight: 1.55 }}>
                     {t(p.explanationSummary || 'AI summary unavailable for this prediction.')}
                   </p>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 12 }}>
+                    {t(p.feedbackSummary || '')}
+                  </div>
 
                   <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Key Drivers')}</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
@@ -860,10 +863,28 @@ export function HRDashboardPage() {
                     )}
                   </div>
 
-                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Recommended Actions')}</div>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Main Risk Points')}</div>
+                  <ul style={{ margin: '0 0 14px', paddingInlineStart: 18, display: 'grid', gap: 6, color: 'var(--gray-700)', fontSize: 13 }}>
+                    {(p.mainRiskPoints || []).length ? (p.mainRiskPoints || []).slice(0, 3).map((point, index) => (
+                      <li key={`${point}-${index}`}>{t(point)}</li>
+                    )) : (
+                      <li>{t('No strong drivers available for this prediction yet.')}</li>
+                    )}
+                  </ul>
+
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('HR Action Plan')}</div>
+                  <ul style={{ margin: '0 0 12px', paddingInlineStart: 18, display: 'grid', gap: 6, color: 'var(--gray-700)', fontSize: 13 }}>
+                    {(p.hrActionPlan || p.recommendedActions || []).length ? (p.hrActionPlan || p.recommendedActions || []).slice(0, 3).map((action, index) => (
+                      <li key={`hr-${action}-${index}`}>{t(action)}</li>
+                    )) : (
+                      <li>{t('No recommended actions generated yet.')}</li>
+                    )}
+                  </ul>
+
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Admin Action Plan')}</div>
                   <ul style={{ margin: 0, paddingInlineStart: 18, display: 'grid', gap: 6, color: 'var(--gray-700)', fontSize: 13 }}>
-                    {(p.recommendedActions || []).length ? (p.recommendedActions || []).slice(0, 3).map((action, index) => (
-                      <li key={`${action}-${index}`}>{t(action)}</li>
+                    {(p.adminActionPlan || []).length ? (p.adminActionPlan || []).slice(0, 3).map((action, index) => (
+                      <li key={`admin-${action}-${index}`}>{t(action)}</li>
                     )) : (
                       <li>{t('No recommended actions generated yet.')}</li>
                     )}
