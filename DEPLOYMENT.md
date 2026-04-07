@@ -9,7 +9,7 @@
 ## Backend (Railway)
 - Root directory: `backend`
 - Builder: use the repo `Dockerfile` / `backend/Dockerfile` (smaller than the default image builder for this project)
-- Start command: `gunicorn core.wsgi --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --log-file -`
+- Start command: `sh -c "gunicorn core.wsgi --bind 0.0.0.0:${PORT:-8000} --workers 2 --timeout 120 --log-file -"`
 - Python version: `3.11.9`
 - Run after deploy: `python manage.py migrate`
 - Optional: `python manage.py createsuperuser`
@@ -32,5 +32,5 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS=True
 
 ## Notes
 - Use Railway PostgreSQL, not local SQLite, for public deployment.
-- Uploaded media should move to persistent cloud storage later if you want long-term public file hosting.
+- CVs and uploaded files can use Cloudinary by setting `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` on Railway.
 - Vercel SPA rewrites are configured in `frontend/vercel.json`.

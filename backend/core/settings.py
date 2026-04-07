@@ -33,6 +33,14 @@ CSRF_TRUSTED_ORIGINS = env_list(
     ),
 )
 
+CLOUDINARY_URL = os.getenv("CLOUDINARY_URL", "").strip()
+CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "").strip()
+CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+USE_CLOUDINARY = bool(
+    CLOUDINARY_URL or (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+)
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -49,6 +57,12 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",  
 ]
+
+if USE_CLOUDINARY:
+    INSTALLED_APPS += [
+        "cloudinary_storage",
+        "cloudinary",
+    ]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -97,11 +111,26 @@ else:
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+if USE_CLOUDINARY:
+    CLOUDINARY_STORAGE = {
+        "SECURE": True,
+    }
+    if CLOUDINARY_CLOUD_NAME:
+        CLOUDINARY_STORAGE["CLOUD_NAME"] = CLOUDINARY_CLOUD_NAME
+    if CLOUDINARY_API_KEY:
+        CLOUDINARY_STORAGE["API_KEY"] = CLOUDINARY_API_KEY
+    if CLOUDINARY_API_SECRET:
+        CLOUDINARY_STORAGE["API_SECRET"] = CLOUDINARY_API_SECRET
+
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": (
+            "cloudinary_storage.storage.RawMediaCloudinaryStorage"
+            if USE_CLOUDINARY
+            else "django.core.files.storage.FileSystemStorage"
+        ),
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
