@@ -139,68 +139,104 @@ export function HRFormsPage() {
   const handleCreate = async () => {
     if (!formData.title.trim()) { toast('Title is required', 'error'); return; }
     setSaving(true);
-    const res = await hrCreateForm(formData);
-    setSaving(false);
-    if (res.formID) {
-      toast('Form created');
-      setShowCreate(false);
-      setFormData({ title: '', description: '' });
-      await load(res.formID);
-    } else toast('Failed to create form', 'error');
+    try {
+      const res = await hrCreateForm(formData);
+      if (res?.formID) {
+        toast('Form created');
+        setShowCreate(false);
+        setFormData({ title: '', description: '' });
+        await load(res.formID);
+      } else {
+        toast('Failed to create form', 'error');
+      }
+    } catch (error) {
+      toast(error?.message || 'Failed to create form', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdate = async () => {
     if (!formData.title.trim()) { toast('Title is required', 'error'); return; }
+    if (!selectedForm?.formID) { toast('Select a form first', 'error'); return; }
     setSaving(true);
-    const res = await hrUpdateForm(selectedForm.formID, formData);
-    setSaving(false);
-    if (res.formID) {
-      toast('Form updated');
-      setShowEdit(false);
-      await load(selectedForm.formID);
-    } else toast('Failed to update form', 'error');
+    try {
+      const res = await hrUpdateForm(selectedForm.formID, formData);
+      if (res?.formID) {
+        toast('Form updated');
+        setShowEdit(false);
+        await load(selectedForm.formID);
+      } else {
+        toast('Failed to update form', 'error');
+      }
+    } catch (error) {
+      toast(error?.message || 'Failed to update form', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (form) => {
     if (!window.confirm(`Delete "${form.title}"? This cannot be undone.`)) return;
-    await hrDeleteForm(form.formID);
-    toast('Form deleted');
-    const remainingForms = forms.filter((item) => item.formID !== form.formID);
-    const nextSelection = selectedForm?.formID === form.formID
-      ? (remainingForms[0]?.formID || null)
-      : selectedForm?.formID;
-    await load(nextSelection);
+    try {
+      await hrDeleteForm(form.formID);
+      toast('Form deleted');
+      const remainingForms = forms.filter((item) => item.formID !== form.formID);
+      const nextSelection = selectedForm?.formID === form.formID
+        ? (remainingForms[0]?.formID || null)
+        : selectedForm?.formID;
+      await load(nextSelection);
+    } catch (error) {
+      toast(error?.message || 'Failed to delete form', 'error');
+    }
   };
 
   const handleToggleActive = async (form) => {
-    if (form.isActive) {
-      await hrDeactivateForm(form.formID);
-      toast(`"${form.title}" deactivated`);
-    } else {
-      await hrActivateForm(form.formID);
-      toast(`"${form.title}" is now active`);
+    try {
+      if (form.isActive) {
+        await hrDeactivateForm(form.formID);
+        toast(`"${form.title}" deactivated`);
+      } else {
+        await hrActivateForm(form.formID);
+        toast(`"${form.title}" is now active`);
+      }
+      await load(form.formID);
+    } catch (error) {
+      toast(error?.message || 'Failed to update form status', 'error');
     }
-    await load(form.formID);
   };
 
   const handleAddQuestion = async () => {
+    if (!selectedForm?.formID) { toast('Select a form first', 'error'); return; }
     if (!qData.questionText.trim()) { toast('Question text is required', 'error'); return; }
     setSaving(true);
-    const res = await hrAddQuestion(selectedForm.formID, qData);
-    setSaving(false);
-    if (res.questionID) {
-      toast('Question added');
-      setShowAddQ(false);
-      setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
-      await load(selectedForm.formID);
-    } else toast('Failed to add question', 'error');
+    try {
+      const res = await hrAddQuestion(selectedForm.formID, qData);
+      if (res?.questionID) {
+        toast('Question added');
+        setShowAddQ(false);
+        setQData({ questionText: '', fieldType: 'score_1_4', order: 0 });
+        await load(selectedForm.formID);
+      } else {
+        toast('Failed to add question', 'error');
+      }
+    } catch (error) {
+      toast(error?.message || 'Failed to add question', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteQuestion = async (q) => {
     if (!window.confirm('Delete this question?')) return;
-    await hrDeleteQuestion(q.questionID);
-    toast('Question deleted');
-    await load(selectedForm.formID);
+    if (!selectedForm?.formID) { toast('Select a form first', 'error'); return; }
+    try {
+      await hrDeleteQuestion(q.questionID);
+      toast('Question deleted');
+      await load(selectedForm.formID);
+    } catch (error) {
+      toast(error?.message || 'Failed to delete question', 'error');
+    }
   };
 
   const handleExportResponseHealth = () => {
