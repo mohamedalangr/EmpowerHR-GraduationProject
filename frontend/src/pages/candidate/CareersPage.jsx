@@ -915,7 +915,7 @@ export function EmployeeCareersPage() {
                 <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 14, background: '#F8FAFC', border: '1px solid #E7EAEE' }}>
                   <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 4 }}>{t('Tracking code')}</div>
                   <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '.08em', color: 'var(--red)' }}>{result.tracking_code}</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{t('Save this code if you want to track updates without signing in.')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{t('Save this code if you want to track updates without logging in.')}</div>
                 </div>
               ) : null}
             </div>
