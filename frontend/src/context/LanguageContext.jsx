@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'empowerhr-language';
 
@@ -28,6 +29,10 @@ const translations = {
     'layout.quickDensityHint': 'Switch between compact and comfortable spacing',
     'layout.quickSignOutHint': 'End the current session safely',
     'layout.currentPage': 'Current Page',
+    'layout.currency': 'Currency',
+    'layout.currencyHint': 'Choose whether HR and admin amounts appear in EGP or USD.',
+    'currency.EGP': 'EGP',
+    'currency.USD': 'USD',
     'approval.noteRequired': 'Please add a short note before rejecting, declining, or resolving this item.',
     'approval.rejectHint': 'Add a short reason here when you reject or close an item.',
     'approval.stageNoteRequired': 'Please add a short hiring note before marking a candidate as hired or rejected.',
@@ -246,11 +251,43 @@ const translations = {
     'Stay on top of your workday, growth, and open service requests from one place.': 'Stay on top of your workday, growth, and open service requests from one place.',
     'Open Requests': 'Open Requests',
     'Quick Actions': 'Quick Actions',
+    'Growth & Service Signals': 'Growth & Service Signals',
+    'Pull together the next actions across your daily work, learning, and service requests.': 'Pull together the next actions across your daily work, learning, and service requests.',
+    'Personal Action Summary': 'Personal Action Summary',
+    'One queue for your next goals, learning, policy, shift, and support follow-up.': 'One queue for your next goals, learning, policy, shift, and support follow-up.',
     "Today's Focus": "Today's Focus",
     'Items': 'Items',
     'No urgent personal follow-up items are flagged right now.': 'No urgent personal follow-up items are flagged right now.',
+    'Attendance, Leave & Payroll': 'Attendance, Leave & Payroll',
     'Personal attendance, leave, payroll, and requests.': 'Personal attendance, leave, payroll, and requests.',
     'Growth & Execution': 'Growth & Execution',
+    'Shifts & Policies': 'Shifts & Policies',
+    'Upcoming schedules and policy acknowledgements that may need a response.': 'Upcoming schedules and policy acknowledgements that may need a response.',
+    'Published Policies': 'Published Policies',
+    'Upcoming Shifts': 'Upcoming Shifts',
+    'Requests, acknowledgements, and scheduled coverage that may still need your response.': 'Requests, acknowledgements, and scheduled coverage that may still need your response.',
+    'Attendance and leave visibility for the current day.': 'Attendance and leave visibility for the current day.',
+    'Support, document, and leave items still waiting on an update.': 'Support, document, and leave items still waiting on an update.',
+    'Review the newest published updates so nothing slips past your acknowledgement queue.': 'Review the newest published updates so nothing slips past your acknowledgement queue.',
+    'No new policy acknowledgement is waiting right now.': 'No new policy acknowledgement is waiting right now.',
+    'Confirm near-term coverage and any schedule swaps early.': 'Confirm near-term coverage and any schedule swaps early.',
+    'No shift changes are pressing right now.': 'No shift changes are pressing right now.',
+    'Support Response Radar': 'Support Response Radar',
+    'Priority Resolution Queue': 'Priority Resolution Queue',
+    'Support Playbook': 'Support Playbook',
+    'Category Pressure': 'Category Pressure',
+    'Onboarding Transition Radar': 'Onboarding Transition Radar',
+    'Priority Transition Queue': 'Priority Transition Queue',
+    'Onboarding Playbook': 'Onboarding Playbook',
+    'Plan Type Pressure': 'Plan Type Pressure',
+    'Shift Coverage Radar': 'Shift Coverage Radar',
+    'Priority Shift Queue': 'Priority Shift Queue',
+    'Shift Playbook': 'Shift Playbook',
+    'Shift Type Pressure': 'Shift Type Pressure',
+    'Policy Compliance Radar': 'Policy Compliance Radar',
+    'Priority Acknowledgement Queue': 'Priority Acknowledgement Queue',
+    'Policy Playbook': 'Policy Playbook',
+    'Audience Pressure': 'Audience Pressure',
     'Your active goals, tasks, and learning plan.': 'Your active goals, tasks, and learning plan.',
     'Support & Requests': 'Support & Requests',
     'Support, documents, and service requests that still need updates.': 'Support, documents, and service requests that still need updates.',
@@ -720,6 +757,10 @@ const translations = {
     'layout.quickDensityHint': 'التبديل بين المسافات المدمجة والمريحة',
     'layout.quickSignOutHint': 'إنهاء الجلسة الحالية بأمان',
     'layout.currentPage': 'الصفحة الحالية',
+    'layout.currency': 'العملة',
+    'layout.currencyHint': 'اختر ما إذا كانت مبالغ الموارد البشرية والإدارة تظهر بالجنيه المصري أو الدولار الأمريكي.',
+    'currency.EGP': 'EGP',
+    'currency.USD': 'USD',
     'approval.noteRequired': 'يرجى إضافة ملاحظة قصيرة قبل الرفض أو الإغلاق أو الحل.',
     'approval.rejectHint': 'أضف سببًا قصيرًا هنا عند رفض أو إغلاق أي عنصر.',
     'approval.stageNoteRequired': 'يرجى إضافة ملاحظة قصيرة قبل اعتماد المرشح كمقبول أو مرفوض.',
@@ -937,11 +978,43 @@ const translations = {
     'Stay on top of your workday, growth, and open service requests from one place.': 'تابع يوم عملك وتطورك وطلبات الخدمة المفتوحة من مكان واحد.',
     'Open Requests': 'الطلبات المفتوحة',
     'Quick Actions': 'إجراءات سريعة',
+    'Growth & Service Signals': 'إشارات النمو والخدمة',
+    'Pull together the next actions across your daily work, learning, and service requests.': 'اجمع الخطوات التالية عبر عملك اليومي وتعلمك وطلبات الخدمة في عرض واحد.',
+    'Personal Action Summary': 'ملخص الإجراءات الشخصية',
+    'One queue for your next goals, learning, policy, shift, and support follow-up.': 'قائمة واحدة تضم أهدافك القادمة والتعلم والسياسات والنوبات ومتابعات الدعم.',
     "Today's Focus": 'أولويات اليوم',
     'Items': 'عناصر',
     'No urgent personal follow-up items are flagged right now.': 'لا توجد عناصر شخصية عاجلة تحتاج متابعة الآن.',
+    'Attendance, Leave & Payroll': 'الحضور والإجازات والرواتب',
     'Personal attendance, leave, payroll, and requests.': 'الحضور والإجازات والرواتب والطلبات الشخصية.',
     'Growth & Execution': 'التطور والتنفيذ',
+    'Shifts & Policies': 'النوبات والسياسات',
+    'Upcoming schedules and policy acknowledgements that may need a response.': 'النوبات القادمة وإقرارات السياسات التي قد تحتاج إلى رد منك.',
+    'Published Policies': 'السياسات المنشورة',
+    'Upcoming Shifts': 'النوبات القادمة',
+    'Requests, acknowledgements, and scheduled coverage that may still need your response.': 'الطلبات والإقرارات والتغطيات المجدولة التي قد ما تزال تحتاج إلى استجابتك.',
+    'Attendance and leave visibility for the current day.': 'وضوح حالة الحضور والإجازة لليوم الحالي.',
+    'Support, document, and leave items still waiting on an update.': 'عناصر الدعم والمستندات والإجازات التي ما زالت بانتظار تحديث.',
+    'Review the newest published updates so nothing slips past your acknowledgement queue.': 'راجع أحدث التحديثات المنشورة حتى لا يفوتك أي إقرار مطلوب.',
+    'No new policy acknowledgement is waiting right now.': 'لا توجد إقرارات سياسة جديدة بانتظارك الآن.',
+    'Confirm near-term coverage and any schedule swaps early.': 'أكد التغطية القريبة وأي تبديلات في الجدول مبكرًا.',
+    'No shift changes are pressing right now.': 'لا توجد تغييرات ملحّة في النوبات الآن.',
+    'Support Response Radar': 'رادار استجابة الدعم',
+    'Priority Resolution Queue': 'قائمة أولويات الحل',
+    'Support Playbook': 'خطة عمل الدعم',
+    'Category Pressure': 'ضغط الفئات',
+    'Onboarding Transition Radar': 'رادار انتقال التهيئة',
+    'Priority Transition Queue': 'قائمة أولويات الانتقال',
+    'Onboarding Playbook': 'خطة عمل التهيئة',
+    'Plan Type Pressure': 'ضغط أنواع الخطط',
+    'Shift Coverage Radar': 'رادار تغطية النوبات',
+    'Priority Shift Queue': 'قائمة أولويات النوبات',
+    'Shift Playbook': 'خطة عمل النوبات',
+    'Shift Type Pressure': 'ضغط أنواع النوبات',
+    'Policy Compliance Radar': 'رادار امتثال السياسات',
+    'Priority Acknowledgement Queue': 'قائمة أولويات الإقرار',
+    'Policy Playbook': 'خطة عمل السياسات',
+    'Audience Pressure': 'ضغط الفئات المستهدفة',
     'Your active goals, tasks, and learning plan.': 'أهدافك النشطة ومهامك وخطة تعلمك.',
     'Support & Requests': 'الدعم والطلبات',
     'Support, documents, and service requests that still need updates.': 'الدعم والمستندات وطلبات الخدمة التي ما زالت تحتاج تحديثًا.',
@@ -2032,7 +2105,15 @@ function interpolate(template, vars = {}) {
 }
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState(() => localStorage.getItem(STORAGE_KEY) || 'en');
+  const { user, updateAccountPreferences } = useAuth();
+  const [language, setLanguageState] = useState(() => localStorage.getItem(STORAGE_KEY) || 'en');
+
+  useEffect(() => {
+    const nextLanguage = user?.language_preference;
+    if (nextLanguage && nextLanguage !== language) {
+      setLanguageState(nextLanguage);
+    }
+  }, [language, user?.language_preference]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, language);
@@ -2044,9 +2125,25 @@ export function LanguageProvider({ children }) {
     document.body.classList.toggle('app-rtl', isArabic);
   }, [language]);
 
+  const setLanguage = useCallback(async (nextLanguage) => {
+    const resolvedLanguage = typeof nextLanguage === 'function' ? nextLanguage(language) : nextLanguage;
+    if (!resolvedLanguage) return;
+
+    const previousLanguage = language;
+    setLanguageState(resolvedLanguage);
+
+    if (user) {
+      try {
+        await updateAccountPreferences({ language_preference: resolvedLanguage });
+      } catch {
+        setLanguageState(user.language_preference || previousLanguage);
+      }
+    }
+  }, [language, updateAccountPreferences, user]);
+
   const toggleLanguage = useCallback(() => {
     setLanguage((prev) => (prev === 'en' ? 'ar' : 'en'));
-  }, []);
+  }, [setLanguage]);
 
   const t = useCallback((key, vars = {}) => {
     const table = translations[language] || translations.en;

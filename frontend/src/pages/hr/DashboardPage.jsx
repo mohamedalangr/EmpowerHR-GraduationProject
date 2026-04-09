@@ -1,11 +1,84 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getPredictions, hrCreateActionPlan, hrGetActionPlans, hrGetInsights, hrGetIntelligence, hrGetRecognitionWatch, hrUpdateActionPlanStatus, runPrediction } from '../../api/index.js';
-import { Spinner, Btn, useToast } from '../../components/shared/index.jsx';
+import { useNavigate } from 'react-router-dom';
+import {
+  getPredictions,
+  hrCreateActionPlan,
+  hrGetActionPlans,
+  hrGetApprovalSnapshot,
+  hrGetAttendanceWatch,
+  hrGetBenefitWatch,
+  hrGetDocumentWatch,
+  hrGetExpenseWatch,
+  hrGetInsights,
+  hrGetIntelligence,
+  hrGetJobPipelineHealth,
+  hrGetOnboardingWatch,
+  hrGetPayrollWatch,
+  hrGetPolicyCompliance,
+  hrGetRecognitionWatch,
+  hrGetSuccessionWatch,
+  hrGetTicketWatch,
+  hrGetTrainingCompliance,
+  hrUpdateActionPlanStatus,
+  runPrediction,
+} from '../../api/index.js';
+import { Spinner, Btn, Badge, useToast } from '../../components/shared/index.jsx';
+import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
 const RISK_COLORS = { High: '#E8321A', Medium: '#F59E0B', Low: '#22C55E' };
 const RISK_BG = { High: '#FFF0ED', Medium: '#FFF7ED', Low: '#F0FDF4' };
 const EMPTY_RECOGNITION_WATCH = { summary: {}, categoryBreakdown: [], followUpItems: [] };
+const EMPTY_FOLLOW_UP_WATCH = { summary: {}, followUpItems: [] };
+const EMPTY_OPERATION_WATCHES = {
+  approvals: { summary: {}, followUpItems: [] },
+  attendance: EMPTY_FOLLOW_UP_WATCH,
+  payroll: EMPTY_FOLLOW_UP_WATCH,
+  benefits: EMPTY_FOLLOW_UP_WATCH,
+  expenses: EMPTY_FOLLOW_UP_WATCH,
+  documents: EMPTY_FOLLOW_UP_WATCH,
+  tickets: EMPTY_FOLLOW_UP_WATCH,
+  training: EMPTY_FOLLOW_UP_WATCH,
+  succession: EMPTY_FOLLOW_UP_WATCH,
+  onboarding: EMPTY_FOLLOW_UP_WATCH,
+  recruitment: { totals: {}, followUpItems: [] },
+  policy: { summary: {}, followUpItems: [] },
+};
+
+const getFollowUpItems = (data) => {
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.followUpItems)) return data.followUpItems;
+  if (Array.isArray(data.escalationItems)) return data.escalationItems;
+  if (Array.isArray(data.priorityItems)) return data.priorityItems;
+  return [];
+};
+
+const getActionStateTone = (value = '') => {
+  const normalized = String(value || '').toLowerCase();
+  if (/(critical|overdue|stale|high|blocked|escalated)/.test(normalized)) return 'red';
+  if (/(pending|due soon|at risk|open shift|waiting|follow up)/.test(normalized)) return 'yellow';
+  if (/(active|interview|in progress|scheduled)/.test(normalized)) return 'accent';
+  if (/(healthy|on track|approved|done|resolved|enrolled|complete)/.test(normalized)) return 'green';
+  return 'gray';
+};
+
+const getActionPriority = (item = {}) => {
+  const normalized = [
+    item.followUpState,
+    item.dueState,
+    item.status,
+    item.slaState,
+    item.priority,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (/(critical|overdue|stale|high|blocked|escalated)/.test(normalized)) return 4;
+  if (/(pending|due soon|at risk|open|waiting|follow up)/.test(normalized)) return 3;
+  if (/(active|interview|in progress|scheduled)/.test(normalized)) return 2;
+  return 1;
+};
 
 const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-8') => {
   const blob = new Blob([content], { type: mimeType });
@@ -22,12 +95,19 @@ const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-
 export function HRDashboardPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
-  const formatCurrency = (value) => new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
+  const { resolvePath } = useAuth();
+  const navigate = useNavigate();
+  const formatCurrency = (value) => {
+    const preferredCurrency = typeof document !== 'undefined'
+      ? (document.documentElement.dataset.currencyPreference || 'EGP')
+      : 'EGP';
+    return new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+      style: 'currency',
+      currency: preferredCurrency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Number(value || 0));
+  };
   const [predictions, setPredictions] = useState([]);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState(null);
@@ -36,6 +116,7 @@ export function HRDashboardPage() {
   const [insights, setInsights] = useState(null);
   const [intelligence, setIntelligence] = useState(null);
   const [recognitionWatch, setRecognitionWatch] = useState(EMPTY_RECOGNITION_WATCH);
+  const [operationsWatches, setOperationsWatches] = useState(EMPTY_OPERATION_WATCHES);
   const [actionPlans, setActionPlans] = useState([]);
   const [actionPlanSavingKey, setActionPlanSavingKey] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(true);
@@ -43,16 +124,60 @@ export function HRDashboardPage() {
   const loadInsights = async ({ showSuccess = false } = {}) => {
     setLoadingInsights(true);
     try {
-      const [insightData, intelligenceData, recognitionData, latestPredictions, planData] = await Promise.all([
+      const [
+        insightData,
+        intelligenceData,
+        recognitionData,
+        latestPredictions,
+        planData,
+        approvalData,
+        attendanceWatchData,
+        payrollWatchData,
+        benefitWatchData,
+        expenseWatchData,
+        documentWatchData,
+        ticketWatchData,
+        trainingComplianceData,
+        successionWatchData,
+        onboardingWatchData,
+        recruitmentHealthData,
+        policyComplianceData,
+      ] = await Promise.all([
         hrGetInsights(),
         hrGetIntelligence().catch(() => null),
         hrGetRecognitionWatch().catch(() => EMPTY_RECOGNITION_WATCH),
         getPredictions().catch(() => []),
         hrGetActionPlans().catch(() => []),
+        hrGetApprovalSnapshot().catch(() => EMPTY_OPERATION_WATCHES.approvals),
+        hrGetAttendanceWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetPayrollWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetBenefitWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetExpenseWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetDocumentWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetTicketWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetTrainingCompliance().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetSuccessionWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetOnboardingWatch().catch(() => EMPTY_FOLLOW_UP_WATCH),
+        hrGetJobPipelineHealth().catch(() => EMPTY_OPERATION_WATCHES.recruitment),
+        hrGetPolicyCompliance().catch(() => EMPTY_OPERATION_WATCHES.policy),
       ]);
       setInsights(insightData || null);
       setIntelligence(intelligenceData || null);
       setRecognitionWatch(recognitionData && typeof recognitionData === 'object' ? recognitionData : EMPTY_RECOGNITION_WATCH);
+      setOperationsWatches({
+        approvals: approvalData && typeof approvalData === 'object' ? approvalData : EMPTY_OPERATION_WATCHES.approvals,
+        attendance: attendanceWatchData && typeof attendanceWatchData === 'object' ? attendanceWatchData : EMPTY_FOLLOW_UP_WATCH,
+        payroll: payrollWatchData && typeof payrollWatchData === 'object' ? payrollWatchData : EMPTY_FOLLOW_UP_WATCH,
+        benefits: benefitWatchData && typeof benefitWatchData === 'object' ? benefitWatchData : EMPTY_FOLLOW_UP_WATCH,
+        expenses: expenseWatchData && typeof expenseWatchData === 'object' ? expenseWatchData : EMPTY_FOLLOW_UP_WATCH,
+        documents: documentWatchData && typeof documentWatchData === 'object' ? documentWatchData : EMPTY_FOLLOW_UP_WATCH,
+        tickets: ticketWatchData && typeof ticketWatchData === 'object' ? ticketWatchData : EMPTY_FOLLOW_UP_WATCH,
+        training: trainingComplianceData && typeof trainingComplianceData === 'object' ? trainingComplianceData : EMPTY_FOLLOW_UP_WATCH,
+        succession: successionWatchData && typeof successionWatchData === 'object' ? successionWatchData : EMPTY_FOLLOW_UP_WATCH,
+        onboarding: onboardingWatchData && typeof onboardingWatchData === 'object' ? onboardingWatchData : EMPTY_FOLLOW_UP_WATCH,
+        recruitment: recruitmentHealthData && typeof recruitmentHealthData === 'object' ? recruitmentHealthData : EMPTY_OPERATION_WATCHES.recruitment,
+        policy: policyComplianceData && typeof policyComplianceData === 'object' ? policyComplianceData : EMPTY_OPERATION_WATCHES.policy,
+      });
       setActionPlans(Array.isArray(planData) ? planData : []);
       if (Array.isArray(latestPredictions) && latestPredictions.length) {
         setPredictions(latestPredictions);
@@ -110,10 +235,215 @@ export function HRDashboardPage() {
   const recognitionSummary = recognitionWatch?.summary || {};
   const recognitionCategoryBreakdown = recognitionWatch?.categoryBreakdown || [];
   const recognitionFollowUpItems = recognitionWatch?.followUpItems || [];
+  const recognitionGapCount = recognitionSummary.employeesWithoutRecognition ?? recognitionFollowUpItems.filter((item) => item.followUpState === 'Recognition Gap').length;
+  const reigniteCount = recognitionFollowUpItems.filter((item) => item.followUpState === 'Reignite Recognition').length;
+  const checkInDueCount = recognitionFollowUpItems.filter((item) => item.followUpState === 'Check-In Due').length;
+  const recognitionSpotlights = useMemo(() => {
+    const stateRank = { 'Recognition Gap': 3, 'Reignite Recognition': 2, 'Check-In Due': 1 };
+    return [...recognitionFollowUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(b.daysSinceRecognition || 0) - Number(a.daysSinceRecognition || 0)
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [recognitionFollowUpItems]);
+  const recognitionMomentumMap = useMemo(() => {
+    return [...recognitionCategoryBreakdown]
+      .sort((a, b) => Number(b.recentCount || 0) - Number(a.recentCount || 0)
+        || Number(b.points || 0) - Number(a.points || 0)
+        || Number(b.count || 0) - Number(a.count || 0))
+      .slice(0, 4);
+  }, [recognitionCategoryBreakdown]);
+  const recognitionPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (recognitionGapCount > 0) {
+      plays.push({
+        title: t('Spotlight employees with no recognition history'),
+        note: t('Start with employees who have never been recognized so the recognition program feels inclusive across the workforce.'),
+      });
+    }
+    if ((recognitionSummary.staleRecognitionCount ?? 0) > 0 || reigniteCount > 0) {
+      plays.push({
+        title: t('Reignite stale appreciation'),
+        note: t('Teams with recognition silence should get fresh shout-outs or manager check-ins before momentum fades further.'),
+      });
+    }
+    if (checkInDueCount > 0) {
+      plays.push({
+        title: t('Schedule quick recognition check-ins'),
+        note: t('Employees who have gone quiet recently are good candidates for a timely thank-you or coaching conversation.'),
+      });
+    }
+    if (recognitionMomentumMap.length > 0) {
+      plays.push({
+        title: t('Reuse the strongest recognition themes'),
+        note: t('Lift the recognition categories with the best recent momentum and share those examples with managers.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep recognition momentum steady'),
+      note: t('Recognition activity looks healthy, so keep the current peer and manager appreciation rhythm in place.'),
+    }];
+  }, [checkInDueCount, recognitionGapCount, recognitionMomentumMap, recognitionSummary.staleRecognitionCount, reigniteCount, t]);
+  const recognitionStrongestSignal = recognitionGapCount > 0
+    ? t('Some employees still have no recognition history, so the fastest culture win is widening appreciation coverage.')
+    : (recognitionSummary.staleRecognitionCount ?? 0) > 0
+      ? t('Recognition has gone stale for part of the workforce, so fresh manager shout-outs should be the next action.')
+      : t('Recognition momentum looks healthy; keep consistent appreciation visible across teams to sustain it.');
   const intelligenceOverview = intelligence?.overview || {};
   const intelligenceTrends = intelligence?.trends || {};
   const priorityQueue = intelligence?.priorityQueue || [];
   const openActionPlans = actionPlans.filter((item) => item.status !== 'Done');
+  const actionCenterServices = useMemo(() => ([
+    {
+      key: 'approvals',
+      label: t('Approvals'),
+      path: resolvePath('/hr/approvals'),
+      accent: '#E8321A',
+      note: t('Leave, payroll, and reimbursement decisions waiting for sign-off.'),
+      count: operationsWatches.approvals?.summary?.pendingCount
+        ?? operationsWatches.approvals?.summary?.pendingApprovals
+        ?? getFollowUpItems(operationsWatches.approvals).length,
+      items: getFollowUpItems(operationsWatches.approvals),
+    },
+    {
+      key: 'attendance',
+      label: t('Attendance'),
+      path: resolvePath('/hr/attendance'),
+      accent: '#F59E0B',
+      note: t('Open shifts, partial days, and leave cases that still need action.'),
+      count: operationsWatches.attendance?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.attendance).length,
+      items: getFollowUpItems(operationsWatches.attendance),
+    },
+    {
+      key: 'recruitment',
+      label: t('Recruitment'),
+      path: resolvePath('/hr/jobs'),
+      accent: '#2563EB',
+      note: t('Stale candidates or hiring bottlenecks across live roles.'),
+      count: operationsWatches.recruitment?.totals?.staleCandidates ?? getFollowUpItems(operationsWatches.recruitment).length,
+      items: getFollowUpItems(operationsWatches.recruitment),
+    },
+    {
+      key: 'payroll',
+      label: t('Payroll'),
+      path: resolvePath('/hr/payroll'),
+      accent: '#7C3AED',
+      note: t('Draft or overdue payroll items waiting for release checks.'),
+      count: operationsWatches.payroll?.summary?.followUpCount ?? operationsWatches.payroll?.summary?.draftCount ?? getFollowUpItems(operationsWatches.payroll).length,
+      items: getFollowUpItems(operationsWatches.payroll),
+    },
+    {
+      key: 'benefits',
+      label: t('Benefits'),
+      path: resolvePath('/hr/benefits'),
+      accent: '#0F766E',
+      note: t('Enrollments, renewals, or coverage updates needing HR follow-up.'),
+      count: operationsWatches.benefits?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.benefits).length,
+      items: getFollowUpItems(operationsWatches.benefits),
+    },
+    {
+      key: 'expenses',
+      label: t('Expenses'),
+      path: resolvePath('/hr/expenses'),
+      accent: '#C2410C',
+      note: t('Claims and reimbursements still waiting for review or payout.'),
+      count: operationsWatches.expenses?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.expenses).length,
+      items: getFollowUpItems(operationsWatches.expenses),
+    },
+    {
+      key: 'documents',
+      label: t('Documents'),
+      path: resolvePath('/hr/documents'),
+      accent: '#1D4ED8',
+      note: t('Issuance requests that are delayed or still in progress.'),
+      count: operationsWatches.documents?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.documents).length,
+      items: getFollowUpItems(operationsWatches.documents),
+    },
+    {
+      key: 'tickets',
+      label: t('Support Tickets'),
+      path: resolvePath('/hr/tickets'),
+      accent: '#BE123C',
+      note: t('Critical support issues or aging employee requests needing attention.'),
+      count: operationsWatches.tickets?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.tickets).length,
+      items: getFollowUpItems(operationsWatches.tickets),
+    },
+    {
+      key: 'training',
+      label: t('Training'),
+      path: resolvePath('/hr/training'),
+      accent: '#15803D',
+      note: t('Mandatory learning items at risk or already overdue.'),
+      count: operationsWatches.training?.summary?.atRiskAssignments ?? getFollowUpItems(operationsWatches.training).length,
+      items: getFollowUpItems(operationsWatches.training),
+    },
+    {
+      key: 'succession',
+      label: t('Succession'),
+      path: resolvePath('/hr/succession'),
+      accent: '#9333EA',
+      note: t('Succession or retention readiness items needing a decision.'),
+      count: operationsWatches.succession?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.succession).length,
+      items: getFollowUpItems(operationsWatches.succession),
+    },
+    {
+      key: 'onboarding',
+      label: t('Onboarding'),
+      path: resolvePath('/hr/onboarding'),
+      accent: '#0891B2',
+      note: t('New-hire onboarding plans that are blocked or behind schedule.'),
+      count: operationsWatches.onboarding?.summary?.followUpCount ?? getFollowUpItems(operationsWatches.onboarding).length,
+      items: getFollowUpItems(operationsWatches.onboarding),
+    },
+    {
+      key: 'policy',
+      label: t('Policies'),
+      path: resolvePath('/hr/policies'),
+      accent: '#475467',
+      note: t('Outstanding acknowledgements or compliance reminders needing outreach.'),
+      count: operationsWatches.policy?.summary?.pendingAcknowledgements ?? getFollowUpItems(operationsWatches.policy).length,
+      items: getFollowUpItems(operationsWatches.policy),
+    },
+  ]), [operationsWatches, resolvePath, t]);
+  const actionCenterItems = useMemo(() => (
+    actionCenterServices
+      .flatMap((service) => service.items.slice(0, 4).map((item, index) => {
+        const state = item.followUpState || item.dueState || item.status || item.slaState || item.priority || t('Needs review');
+        const waitingLabel = Number.isFinite(Number(item.waitingDays)) ? `${item.waitingDays} ${t('days waiting')}` : null;
+        const meta = [
+          item.department,
+          item.jobTitle,
+          item.category,
+          item.benefitName,
+          item.documentType,
+          item.reviewStage,
+          item.date,
+          item.dueDate,
+          waitingLabel,
+        ].filter(Boolean).slice(0, 3).join(' · ');
+
+        return {
+          id: `${service.key}-${item.employeeID || item.employeeName || item.jobID || item.jobTitle || item.ticketID || item.requestID || item.courseID || index}`,
+          serviceLabel: service.label,
+          path: service.path,
+          title: item.employeeName || item.candidateName || item.jobTitle || item.title || item.benefitName || item.documentType || item.policyTitle || t('Follow-up item'),
+          summary: item.summary || item.recommendedAction || item.recommendedActions?.[0] || t('Review this item and follow up from the linked workspace.'),
+          state,
+          meta,
+          priority: getActionPriority(item),
+        };
+      }))
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 8)
+  ), [actionCenterServices, t]);
+  const urgentActionCount = actionCenterItems.filter((item) => item.priority >= 3).length;
+  const activeQueueCount = actionCenterServices.filter((item) => Number(item.count || 0) > 0 || item.items.length > 0).length;
+  const reviewOrderServices = useMemo(
+    () => [...actionCenterServices].sort((a, b) => Number(b.count || 0) - Number(a.count || 0)).slice(0, 5),
+    [actionCenterServices],
+  );
   const openPlanEmployeeIds = useMemo(
     () => new Set(openActionPlans.map((item) => String(item.employeeID || ''))),
     [openActionPlans],
@@ -294,6 +624,35 @@ export function HRDashboardPage() {
     }
   };
 
+  const handleExportActionCenter = () => {
+    if (!actionCenterItems.length) {
+      toast(t('No operations alerts to export.'), 'error');
+      return;
+    }
+
+    try {
+      const dateLabel = new Date().toISOString().slice(0, 10);
+      const rows = [
+        ['Service', 'Title', 'State', 'Details', 'Path'],
+        ...actionCenterItems.map((item) => ([
+          item.serviceLabel,
+          item.title,
+          item.state,
+          `${item.meta || ''} | ${item.summary || ''}`.trim(),
+          item.path,
+        ])),
+      ];
+
+      const csv = rows
+        .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      downloadTextFile(`hr-operations-command-center-${dateLabel}.csv`, csv, 'text/csv;charset=utf-8');
+      toast(t('Operations queue exported.'));
+    } catch {
+      toast(t('Could not export the operations queue.'), 'error');
+    }
+  };
+
   const workforceCards = useMemo(() => ([
     { label: t('nav.employees'), value: totals.totalEmployees ?? '—', accent: '#111827', sub: `${totals.activeEmployees ?? 0} ${t('active')}` },
     { label: t('nav.attendance'), value: `${attendanceSummary.completionRate ?? 0}%`, accent: '#E8321A', sub: `${attendanceSummary.presentCount ?? 0} ${t('present')} · ${leaveSummary.pendingCount ?? 0} ${t('pending leave')}` },
@@ -302,6 +661,12 @@ export function HRDashboardPage() {
   ]), [totals, trainingSummary, attendanceSummary, leaveSummary, payrollSummary, t]);
 
   const dashboardPulseCards = useMemo(() => ([
+    {
+      label: t('Urgent Alerts'),
+      value: urgentActionCount,
+      note: `${activeQueueCount} ${t('service queues currently need attention')}`,
+      accent: '#B42318',
+    },
     {
       label: t('Open Action Plans'),
       value: openActionPlans.length,
@@ -320,7 +685,7 @@ export function HRDashboardPage() {
       note: `${recognitionSummary.employeesWithoutRecognition ?? 0} ${t('employees without recent recognition')}`,
       accent: '#2563EB',
     },
-  ]), [highRiskWithoutPlans.length, openActionPlans.length, priorityQueue.length, recognitionSummary.employeesWithoutRecognition, recognitionSummary.recognizedThisMonth, t]);
+  ]), [activeQueueCount, highRiskWithoutPlans.length, openActionPlans.length, priorityQueue.length, recognitionSummary.employeesWithoutRecognition, recognitionSummary.recognizedThisMonth, t, urgentActionCount]);
 
   return (
     <div className="hr-page-shell">
@@ -360,6 +725,247 @@ export function HRDashboardPage() {
                 <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{card.sub}</div>
               </div>
             ))}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 20, marginBottom: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Recognition Momentum Radar')}</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring recognition gaps, stale appreciation, and category momentum into one engagement review layer for HR leaders.')}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Badge color={recognitionGapCount > 0 ? 'red' : 'green'} label={`${t('Recognition gaps')} ${recognitionGapCount}`} />
+                <Badge color={(recognitionSummary.staleRecognitionCount ?? 0) > 0 ? 'orange' : 'gray'} label={`${t('Stale recognition')} ${recognitionSummary.staleRecognitionCount ?? 0}`} />
+              </div>
+            </div>
+
+            <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+              {[
+                {
+                  label: t('Recognition Gaps'),
+                  value: recognitionGapCount,
+                  note: t('Employees with no recognition history who should be visible in the next appreciation cycle.'),
+                  accent: recognitionGapCount > 0 ? '#B42318' : '#22C55E',
+                },
+                {
+                  label: t('Reignite Recognition'),
+                  value: reigniteCount,
+                  note: t('Employees whose recognition momentum has gone stale and may need a fresh thank-you.'),
+                  accent: reigniteCount > 0 ? '#F59E0B' : '#22C55E',
+                },
+                {
+                  label: t('This Month'),
+                  value: recognitionSummary.recognizedThisMonth ?? 0,
+                  note: t('Recognition activity already recorded this month across the organization.'),
+                  accent: '#2563EB',
+                },
+                {
+                  label: t('Points Granted'),
+                  value: recognitionSummary.totalPoints ?? 0,
+                  note: t('Current points shared through the recognition program so far.'),
+                  accent: '#7C3AED',
+                },
+              ].map((card) => (
+                <div key={card.label} className="workspace-journey-card">
+                  <div className="workspace-journey-title">{card.label}</div>
+                  <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+                  <div className="workspace-journey-note">{card.note}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 0 }}>
+              <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase' }}>{t('Recognition Spotlight Queue')}</div>
+                  <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{recognitionSpotlights.length} {t('items')}</span>
+                </div>
+                {recognitionSpotlights.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Recognition cadence is healthy this cycle.')}</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {recognitionSpotlights.map((item) => {
+                      const tone = recognitionTone(item.followUpState);
+                      return (
+                        <div key={`radar-${item.employeeID}-${item.followUpState}`} className="workspace-action-card">
+                          <div className="workspace-action-eyebrow">{t('Recognition spotlight')}</div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{item.employeeName || item.employeeID}</div>
+                              <div style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{item.jobTitle || '—'} · {item.department || '—'}</div>
+                            </div>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 8px', borderRadius: 999, background: tone.bg, color: tone.color, fontSize: 11.5, fontWeight: 700 }}>
+                              {t(item.followUpState || 'Needs Follow-Up')}
+                            </span>
+                          </div>
+                          <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--gray-700)' }}>{item.summary}</div>
+                          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--gray-500)' }}>
+                            {t('Awards Shared')}: {item.recognitionCount ?? 0} · {t('Points Granted')}: {item.totalPoints ?? 0}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gap: 16 }}>
+                <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Recognition Playbook')}</div>
+                  <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+                    <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+                    <div className="workspace-focus-note">{recognitionStrongestSignal}</div>
+                  </div>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {recognitionPlaybook.map((item) => (
+                      <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                        <div className="workspace-focus-label">{item.title}</div>
+                        <div className="workspace-focus-note">{item.note}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Recognition Momentum Map')}</div>
+                  {recognitionMomentumMap.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Recognition cadence is healthy this cycle.')}</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {recognitionMomentumMap.map((item) => (
+                        <div key={`momentum-${item.category}`} style={{ padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #E4E7EC' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                            <strong>{t(item.category || 'Achievement')}</strong>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#4338CA' }}>{item.count ?? 0}</span>
+                          </div>
+                          <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 6 }}>{item.recentCount ?? 0} {t('This Month')} · {item.employeeCount ?? 0} {t('Employee')}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--gray-700)', marginTop: 4 }}>{item.points ?? 0} {t('Points')}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 20, marginBottom: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Operations Command Center')}</div>
+                <div style={{ fontSize: 13, color: 'var(--gray-500)', maxWidth: 760 }}>
+                  {t('Review the highest-priority HR queues from one place and jump straight into the right workspace for action.')}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Badge color={urgentActionCount > 0 ? 'red' : 'green'} label={`${urgentActionCount} ${t('urgent alerts')}`} />
+                <Btn size="sm" variant="ghost" onClick={handleExportActionCenter}>{t('Export Queue CSV')}</Btn>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 16 }}>
+              {actionCenterServices.slice(0, 8).map((service) => (
+                <button
+                  key={service.key}
+                  type="button"
+                  onClick={() => navigate(service.path)}
+                  style={{
+                    textAlign: 'left',
+                    border: '1px solid #E4E7EC',
+                    borderRadius: 14,
+                    padding: '12px 14px',
+                    background: '#fff',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{service.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: service.accent, margin: '6px 0 4px' }}>{service.count ?? 0}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-600)', lineHeight: 1.45 }}>{service.note}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 0 }}>
+              <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase' }}>{t('Priority Follow-Ups')}</div>
+                  <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{actionCenterItems.length} {t('items')}</span>
+                </div>
+                {actionCenterItems.length === 0 ? (
+                  <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No cross-service alerts are active right now.')}</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {actionCenterItems.map((item) => (
+                      <div key={item.id} className="workspace-action-card">
+                        <div className="workspace-action-eyebrow">{item.serviceLabel}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{item.title}</div>
+                            <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.meta || t('Open the related workspace for full details.')}</div>
+                          </div>
+                          <Badge color={getActionStateTone(item.state)} label={item.state} />
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--gray-700)' }}>{item.summary}</div>
+                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                          <Btn size="sm" variant="ghost" onClick={() => navigate(item.path)}>{t('Open Queue')}</Btn>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gap: 16 }}>
+                <div className="hr-surface-card" style={{ padding: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Queue Health')}</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {[
+                      { label: t('Active queues'), value: activeQueueCount },
+                      { label: t('Urgent follow-ups'), value: urgentActionCount },
+                      { label: t('Open plans'), value: openActionPlans.length },
+                      { label: t('Priority employees'), value: priorityQueue.length },
+                    ].map((item) => (
+                      <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E4E7EC' }}>
+                        <span style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{item.label}</span>
+                        <strong>{item.value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="hr-surface-card" style={{ padding: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Recommended Review Order')}</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {reviewOrderServices.length === 0 ? (
+                      <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('All queues look clear right now.')}</div>
+                    ) : reviewOrderServices.map((service) => (
+                      <button
+                        key={`order-${service.key}`}
+                        type="button"
+                        onClick={() => navigate(service.path)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '10px 12px',
+                          borderRadius: 12,
+                          border: '1px solid #E4E7EC',
+                          background: '#fff',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gray-900)' }}>{service.label}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{service.note}</div>
+                        </div>
+                        <strong style={{ color: service.accent }}>{service.count ?? 0}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.2fr .8fr', marginBottom: 28 }}>

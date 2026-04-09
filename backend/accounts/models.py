@@ -56,12 +56,40 @@ class User(AbstractBaseUser, PermissionsMixin):
         HR_MANAGER   = "HRManager",   "HR Manager"
         ADMIN        = "Admin",       "Admin"
 
+    class CurrencyPreference(models.TextChoices):
+        EGP = "EGP", "Egyptian Pound"
+        USD = "USD", "US Dollar"
+
+    class LanguagePreference(models.TextChoices):
+        EN = "en", "English"
+        AR = "ar", "Arabic"
+
+    class ThemePreference(models.TextChoices):
+        COMFORT = "comfort", "Comfort"
+        COMPACT = "compact", "Compact"
+
     email       = models.EmailField(unique=True)
     full_name   = models.CharField(max_length=150)
     role        = models.CharField(max_length=20, choices=Role.choices)
 
     # Auto-generated for employees, null for candidates
     employee_id = models.CharField(max_length=50, null=True, blank=True, unique=True)
+    currency_preference = models.CharField(
+        max_length=3,
+        choices=CurrencyPreference.choices,
+        default=CurrencyPreference.EGP,
+    )
+    language_preference = models.CharField(
+        max_length=2,
+        choices=LanguagePreference.choices,
+        default=LanguagePreference.EN,
+    )
+    theme_preference = models.CharField(
+        max_length=10,
+        choices=ThemePreference.choices,
+        default=ThemePreference.COMFORT,
+    )
+    focus_mode_preference = models.BooleanField(default=False)
 
     is_active   = models.BooleanField(default=True)
     is_staff    = models.BooleanField(default=False)
@@ -92,6 +120,22 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def is_employee(self):
         return self.role != self.Role.CANDIDATE
+
+    @property
+    def employee_currency_preference(self):
+        if not self.employee_id:
+            return self.currency_preference or self.CurrencyPreference.EGP
+
+        try:
+            from feedback.models import Employee
+
+            employee = Employee.objects.only('currency_preference').filter(employeeID=self.employee_id).first()
+            if employee and employee.currency_preference:
+                return employee.currency_preference
+        except Exception:
+            pass
+
+        return self.currency_preference or self.CurrencyPreference.EGP
 
 
 class PasswordResetOTP(models.Model):

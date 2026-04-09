@@ -64,8 +64,8 @@ import { CandidateApplicationsPage, CandidateDashboardPage } from "./pages/candi
 export default function App() {
   return (
     <BrowserRouter>
-      <LanguageProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <LanguageProvider>
           <Routes>
           {/* --- Public routes (no navbar) --- */}
           <Route path="/login"           element={<EmployeeLogin />} />
@@ -193,8 +193,8 @@ export default function App() {
           <Route path="/"  element={<Navigate to="/login" replace />} />
           <Route path="*"  element={<Navigate to="/login" replace />} />
           </Routes>
-        </AuthProvider>
-      </LanguageProvider>
+        </LanguageProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { hrGetForms, hrGetSubmissionInsights, hrGetSubmissions } from '../../api/index.js';
+import { hrGetForms, hrGetIntelligence, hrGetSubmissionInsights, hrGetSubmissions } from '../../api/index.js';
 import { Spinner, Badge, Btn } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -18,6 +18,17 @@ const downloadTextFile = (filename, content, mimeType = 'text/csv;charset=utf-8'
 };
 
 const EMPTY_INSIGHTS = { summary: {}, questionInsights: [], followUpItems: [] };
+const EMPTY_INTELLIGENCE = { overview: {}, trends: {}, priorityQueue: [] };
+
+const getSignalTone = (item = {}) => {
+  const responseRate = Number(item.responseRate ?? 0);
+  const averageScore = item.averageScore !== undefined ? Number(item.averageScore || 0) : null;
+  const yesRate = item.yesRate !== undefined ? Number(item.yesRate || 0) : null;
+
+  if ((averageScore !== null && averageScore <= 2) || (yesRate !== null && yesRate < 50) || responseRate < 50) return 'red';
+  if ((averageScore !== null && averageScore < 3) || (yesRate !== null && yesRate < 60) || responseRate < 70) return 'orange';
+  return 'green';
+};
 
 export function HRSubmissionPage() {
   const { t } = useLanguage();
@@ -27,6 +38,7 @@ export function HRSubmissionPage() {
   const [forms, setForms]             = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [insights, setInsights]       = useState(EMPTY_INSIGHTS);
+  const [peopleIntelligence, setPeopleIntelligence] = useState(EMPTY_INTELLIGENCE);
   const [selectedForm, setSelected]   = useState('');
   const [loading, setLoading]         = useState(true);
   const [expanded, setExpanded]       = useState(null);
@@ -49,6 +61,7 @@ export function HRSubmissionPage() {
           setSelected('');
           setSubmissions([]);
           setInsights(EMPTY_INSIGHTS);
+          setPeopleIntelligence(EMPTY_INTELLIGENCE);
           setLoading(false);
         }
       })
@@ -58,6 +71,7 @@ export function HRSubmissionPage() {
         setSelected('');
         setSubmissions([]);
         setInsights(EMPTY_INSIGHTS);
+        setPeopleIntelligence(EMPTY_INTELLIGENCE);
         setLoading(false);
       });
 
@@ -78,17 +92,20 @@ export function HRSubmissionPage() {
     Promise.all([
       hrGetSubmissions(selectedForm),
       hrGetSubmissionInsights(selectedForm).catch(() => EMPTY_INSIGHTS),
+      hrGetIntelligence().catch(() => EMPTY_INTELLIGENCE),
     ])
-      .then(([data, insightData]) => {
+      .then(([data, insightData, intelligenceData]) => {
         if (cancelled) return;
         setSubmissions(Array.isArray(data) ? data : []);
         setInsights(insightData && typeof insightData === 'object' ? insightData : EMPTY_INSIGHTS);
+        setPeopleIntelligence(intelligenceData && typeof intelligenceData === 'object' ? intelligenceData : EMPTY_INTELLIGENCE);
         setLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
         setSubmissions([]);
         setInsights(EMPTY_INSIGHTS);
+        setPeopleIntelligence(EMPTY_INTELLIGENCE);
         setLoading(false);
       });
 
@@ -118,6 +135,66 @@ export function HRSubmissionPage() {
   const averageScore = insights?.summary?.averageScore ?? 0;
   const highPriorityItems = insights?.summary?.highPriorityItems ?? 0;
   const selectedFormLabel = forms.find((form) => String(form.formID) === String(selectedForm))?.title || t('No form selected');
+  const questionInsights = insights?.questionInsights || [];
+  const followUpItems = insights?.followUpItems || [];
+  const intelligenceOverview = peopleIntelligence?.overview || {};
+  const priorityQueue = peopleIntelligence?.priorityQueue || [];
+  const lowCoverageQuestions = questionInsights.filter((item) => (item.responseRate ?? 0) < 70).length;
+  const flaggedQuestions = questionInsights.filter((item) => getSignalTone(item) !== 'green').length;
+  const sentimentLabel = averageScore >= 3.2 ? t('Healthy') : averageScore >= 2.6 ? t('Mixed') : averageScore ? t('At Risk') : t('Awaiting data');
+  const signalSpotlights = useMemo(() => {
+    const getPressureScore = (item) => {
+      const responsePressure = (100 - Number(item.responseRate ?? 0)) * 0.5;
+      const scorePressure = item.averageScore !== undefined ? (4 - Number(item.averageScore || 0)) * 24 : 0;
+      const yesPressure = item.yesRate !== undefined ? (100 - Number(item.yesRate || 0)) * 0.7 : 0;
+      return responsePressure + scorePressure + yesPressure;
+    };
+
+    return [...questionInsights].sort((a, b) => getPressureScore(b) - getPressureScore(a)).slice(0, 3);
+  }, [questionInsights]);
+  const strongestSignal = useMemo(() => {
+    const getStrengthScore = (item) => {
+      const responseStrength = Number(item.responseRate ?? 0) * 0.4;
+      const scoreStrength = item.averageScore !== undefined ? Number(item.averageScore || 0) * 20 : 0;
+      const yesStrength = item.yesRate !== undefined ? Number(item.yesRate || 0) * 0.4 : 0;
+      return responseStrength + scoreStrength + yesStrength;
+    };
+
+    return [...questionInsights].sort((a, b) => getStrengthScore(b) - getStrengthScore(a))[0] || null;
+  }, [questionInsights]);
+  const actionPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (highPriorityItems > 0) {
+      plays.push({
+        title: t('Escalate the hottest signal'),
+        note: t('Review the lowest-scoring question with the relevant manager and agree on a response plan this week.'),
+      });
+    }
+    if (pending > 0) {
+      plays.push({
+        title: t('Close the response gap'),
+        note: `${pending} ${t('submissions are still pending for this form and may soften the insight accuracy.')}`,
+      });
+    }
+    if ((intelligenceOverview.followUpCount ?? 0) > 0) {
+      plays.push({
+        title: t('Cross-check people risk cases'),
+        note: t('Align survey watchouts with the people-risk queue before the next talent or retention review.'),
+      });
+    }
+    if (averageScore >= 3.2) {
+      plays.push({
+        title: t('Protect the strongest signal'),
+        note: t('Share what is working well and preserve the strongest positive manager or team practice.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain current cadence'),
+      note: t('No major survey risks are emerging right now. Keep the same review rhythm and response follow-up pattern.'),
+    }];
+  }, [averageScore, highPriorityItems, intelligenceOverview.followUpCount, pending, t]);
   const submissionPulseCards = useMemo(() => ([
     {
       label: t('Selected Form'),
@@ -267,6 +344,100 @@ export function HRSubmissionPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 18, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Feedback Intelligence Hub')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>
+              {t('Connect response sentiment, coverage risk, and broader people follow-up pressure in one HR review layer.')}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge label={`${t('High priority')} ${highPriorityItems}`} color={highPriorityItems ? 'red' : 'green'} />
+            <Badge label={`${t('At-risk employees')} ${intelligenceOverview.followUpCount ?? priorityQueue.length}`} color={(intelligenceOverview.followUpCount ?? priorityQueue.length) ? 'orange' : 'green'} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 18 }}>
+          {[
+            {
+              label: t('Sentiment Temperature'),
+              value: averageScore ? `${averageScore}/4` : '—',
+              note: sentimentLabel,
+              accent: averageScore >= 3.2 ? '#22C55E' : averageScore >= 2.6 ? '#F59E0B' : averageScore ? '#E8321A' : 'var(--gray-500)',
+            },
+            {
+              label: t('Flagged Questions'),
+              value: flaggedQuestions,
+              note: t('Questions showing lower scores, weaker yes rates, or softer coverage.'),
+              accent: flaggedQuestions ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Coverage Gaps'),
+              value: lowCoverageQuestions,
+              note: t('Question signals still sitting below the preferred response threshold.'),
+              accent: lowCoverageQuestions ? '#E8321A' : '#2563EB',
+            },
+            {
+              label: t('People Follow-up Queue'),
+              value: intelligenceOverview.followUpCount ?? priorityQueue.length,
+              note: t('Employees already appearing in the broader people-risk review queue.'),
+              accent: (intelligenceOverview.followUpCount ?? priorityQueue.length) ? '#7C3AED' : '#22C55E',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.05fr .95fr' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Signal Spotlight')}</div>
+            {signalSpotlights.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No standout risk signal is visible yet for this form.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {signalSpotlights.map((item) => (
+                  <div key={item.questionID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.questionText}</strong>
+                      <Badge label={t(getSignalTone(item) === 'red' ? 'High Watch' : getSignalTone(item) === 'orange' ? 'Needs Review' : 'Healthy')} color={getSignalTone(item)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)' }}>{t(item.fieldType)} • {t('Response Rate')}: {item.responseRate ?? 0}%</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 4 }}>
+                      {item.averageScore !== undefined ? `${t('Average Score')}: ${item.averageScore || 0}/4` : item.yesRate !== undefined ? `${t('Yes Rate')}: ${item.yesRate || 0}%` : `${t('Responses')}: ${item.responseCount || 0}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Cross-check Watchlist')}</div>
+            {priorityQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No broader people-risk cases are open right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {priorityQueue.slice(0, 4).map((item) => (
+                  <div key={item.employeeID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.fullName}</strong>
+                      <Badge label={t(item.riskLevel)} color={item.riskLevel === 'High' ? 'red' : item.riskLevel === 'Medium' ? 'orange' : 'green'} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.jobTitle || t('Employee')} • {item.department || t('No Department')}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{item.recommendedActions?.[0] || t('Schedule a proactive follow-up check-in.')}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 24 }}>
         <div className="hr-surface-card" style={{ padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Executive Snapshot')}</div>
@@ -274,6 +445,8 @@ export function HRSubmissionPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Average answers per submission')}</span><strong>{avgAnswers}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Latest response')}</span><strong>{lastSubmitted ? new Date(lastSubmitted).toLocaleString() : '—'}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Visible rows')}</span><strong>{filteredSubmissions.length}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><span>{t('Strongest signal')}</span><strong style={{ textAlign: 'right' }}>{strongestSignal?.questionText || '—'}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}><span>{t('Action playbook')}</span><strong style={{ textAlign: 'right' }}>{actionPlaybook[0]?.title || '—'}</strong></div>
           </div>
         </div>
 
@@ -306,11 +479,11 @@ export function HRSubmissionPage() {
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24 }}>
         <div className="hr-surface-card" style={{ padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Question Insights')}</div>
-          {(insights?.questionInsights || []).length === 0 ? (
+          {questionInsights.length === 0 ? (
             <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No question insight signals are available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {(insights?.questionInsights || []).slice(0, 5).map((item) => (
+              {questionInsights.slice(0, 5).map((item) => (
                 <div key={item.questionID} className="workspace-action-card">
                   <div className="workspace-action-eyebrow">{t('Question signal')}</div>
                   <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 4 }}>{item.questionText}</div>
@@ -326,11 +499,11 @@ export function HRSubmissionPage() {
 
         <div className="hr-surface-card" style={{ padding: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Follow-up Priorities')}</div>
-          {(insights?.followUpItems || []).length === 0 ? (
+          {followUpItems.length === 0 ? (
             <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No urgent feedback follow-up items are flagged right now.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {(insights?.followUpItems || []).map((item) => (
+              {followUpItems.map((item) => (
                 <div key={`${item.questionID}-${item.priority}`} className="workspace-action-card">
                   <div className="workspace-action-eyebrow">{t('Priority follow-up')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>

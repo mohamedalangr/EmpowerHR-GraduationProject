@@ -39,6 +39,14 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getDocumentTone = (item) => {
+  if (item?.followUpState === 'Overdue') return 'red';
+  if (item?.followUpState === 'Awaiting Finalization') return 'yellow';
+  if (item?.followUpState === 'Pending Intake' || item?.status === 'Pending') return 'orange';
+  if (item?.status === 'Issued') return 'green';
+  return 'accent';
+};
+
 export function HRDocumentsPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -87,6 +95,65 @@ export function HRDocumentsPage() {
     issued: watchSummary.issuedCount ?? documents.filter((item) => item.status === 'Issued').length,
     followUp: watchSummary.followUpCount ?? 0,
   }), [documents, watchSummary]);
+
+  const overdueCount = watchSummary.overdueCount ?? followUpItems.filter((item) => item.followUpState === 'Overdue').length;
+  const pendingIntakeCount = followUpItems.filter((item) => item.followUpState === 'Pending Intake').length;
+  const awaitingFinalizationCount = followUpItems.filter((item) => item.followUpState === 'Awaiting Finalization').length;
+  const averageOpenAge = followUpItems.length
+    ? followUpItems.reduce((sum, item) => sum + Number(item.ageDays || 0), 0) / followUpItems.length
+    : 0;
+  const documentFocusQueue = useMemo(() => {
+    const stateRank = { Overdue: 3, 'Awaiting Finalization': 2, 'Pending Intake': 1, 'In Progress': 0 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(b.ageDays || 0) - Number(a.ageDays || 0)
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const documentPressureMap = useMemo(() => {
+    return [...documentTypeBreakdown]
+      .sort((a, b) => (Number(b.pendingCount || 0) + Number(b.inProgressCount || 0)) - (Number(a.pendingCount || 0) + Number(a.inProgressCount || 0))
+        || Number(b.count || 0) - Number(a.count || 0))
+      .slice(0, 4);
+  }, [documentTypeBreakdown]);
+  const issuancePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (overdueCount > 0) {
+      plays.push({
+        title: t('Clear overdue requests first'),
+        note: t('Start with the oldest pending document requests so service delays do not keep stacking up.'),
+      });
+    }
+    if (awaitingFinalizationCount > 0) {
+      plays.push({
+        title: t('Finish in-progress requests'),
+        note: t('Push almost-complete letters and certificates over the line to reduce visible backlog quickly.'),
+      });
+    }
+    if (pendingIntakeCount > 0) {
+      plays.push({
+        title: t('Protect intake response time'),
+        note: t('New document requests should be acknowledged quickly so employees know their request is moving.'),
+      });
+    }
+    if (documentPressureMap.some((item) => Number(item.pendingCount || 0) > 0 || Number(item.inProgressCount || 0) > 0)) {
+      plays.push({
+        title: t('Prioritize the busiest document type'),
+        note: t('Focus on the document type carrying the most open work to reduce service pressure fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep issuance service steady'),
+      note: t('Document operations look stable, so keep the current intake and issuance rhythm in place.'),
+    }];
+  }, [awaitingFinalizationCount, documentPressureMap, overdueCount, pendingIntakeCount, t]);
+  const strongestSignal = overdueCount > 0
+    ? t('Some employee document requests are already overdue and should be cleared before trust in service speed drops.')
+    : awaitingFinalizationCount > 0
+      ? t('Several requests are close to completion, so the fastest win is pushing finalization and issuance through today.')
+      : t('Document service looks stable; keep new requests acknowledged quickly so they do not age into backlog.');
 
   const documentPulseCards = useMemo(() => ([
     {
@@ -230,6 +297,96 @@ export function HRDocumentsPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Document Fulfillment Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring issuance delays, intake pressure, and service hotspots into one document operations review layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={overdueCount > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${overdueCount}`} />
+            <Badge color={pendingIntakeCount > 0 ? 'orange' : 'gray'} label={`${t('Pending intake')} ${pendingIntakeCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Overdue'),
+              value: overdueCount,
+              note: t('Requests already outside the expected service window and most likely to trigger employee follow-up.'),
+              accent: overdueCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Awaiting Finalization'),
+              value: awaitingFinalizationCount,
+              note: t('In-progress requests that need the last step before the employee can receive the document.'),
+              accent: awaitingFinalizationCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Issued'),
+              value: stats.issued,
+              note: t('Completed document requests already delivered or ready for employee pickup.'),
+              accent: '#2563EB',
+            },
+            {
+              label: t('Average Open Age'),
+              value: `${Number(averageOpenAge || 0).toFixed(1)} ${t('days')}`,
+              note: t('Average aging across flagged follow-up items to help judge service speed.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Issuance Queue')}</div>
+            {documentFocusQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority document items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {documentFocusQueue.map((item) => (
+                  <div key={item.requestID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getDocumentTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.documentType)} • {item.purpose}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={t(item.status)} />
+                      <Badge color="gray" label={`${item.ageDays ?? 0} ${t('days open')}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Document Service Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {issuancePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Requests', value: stats.total, accent: '#111827' },
@@ -283,19 +440,26 @@ export function HRDocumentsPage() {
         </div>
 
         <div className="hr-surface-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Document Type Snapshot')}</div>
-          {documentTypeBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Document Pressure Map')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which request types are carrying the most pending intake or finalization pressure.')}</div>
+          {documentPressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No document summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {documentTypeBreakdown.map((item) => (
+              {documentPressureMap.map((item) => (
                 <div key={item.documentType} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{t(item.documentType)}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.count ?? 0}</span>
+                    <Badge
+                      color={Number(item.pendingCount || 0) > 0 ? 'orange' : Number(item.inProgressCount || 0) > 0 ? 'yellow' : 'green'}
+                      label={`${item.count ?? 0} ${t('requests')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                     {item.pendingCount ?? 0} {t('pending')} · {item.inProgressCount ?? 0} {t('in progress')} · {item.issuedCount ?? 0} {t('issued')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {item.declinedCount ?? 0} {t('declined')} · {t('focus where open volume is highest')}
                   </div>
                 </div>
               ))}

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from '../components/shared/Navbar';
-import { Input, Modal } from '../components/shared/index.jsx';
+import { Input, Modal, useToast } from '../components/shared/index.jsx';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -164,9 +164,6 @@ const ROLE_WORKSPACE_COPY = {
   },
 };
 
-const FOCUS_MODE_STORAGE_KEY = 'empowerhr-focus-mode';
-const COMPACT_MODE_STORAGE_KEY = 'empowerhr-compact-mode';
-
 const humanizeSegment = (segment = '') => segment
   .split('-')
   .filter(Boolean)
@@ -191,18 +188,13 @@ const getSectionLabelFromPath = (path, t) => {
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, ROLE_HOME, canAccessPath } = useAuth();
+  const toast = useToast();
+  const { user, logout, ROLE_HOME, canAccessPath, updateAccountPreferences } = useAuth();
   const { t, language } = useLanguage();
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
-  const [isFocusMode, setIsFocusMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(FOCUS_MODE_STORAGE_KEY) === 'true';
-  });
-  const [isCompactMode, setIsCompactMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(COMPACT_MODE_STORAGE_KEY) === 'true';
-  });
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [isCompactMode, setIsCompactMode] = useState(false);
 
   const currentPageLabel = useMemo(
     () => getPageLabelFromPath(location.pathname, t),
@@ -233,12 +225,33 @@ export function AppLayout() {
     [user?.role],
   );
 
-  const workspaceHighlights = useMemo(() => ([
-    user?.role ? t(`role.${user.role}`) : sectionLabel,
-    sectionLabel,
-    isCompactMode ? t('layout.compactView') : t('layout.comfortView'),
-    isFocusMode ? t('layout.focusMode') : t('layout.quickActions'),
-  ]), [isCompactMode, isFocusMode, sectionLabel, t, user?.role]);
+  useEffect(() => {
+    if (!user) return;
+    setIsFocusMode(Boolean(user.focus_mode_preference));
+    setIsCompactMode((user.theme_preference || 'comfort') === 'compact');
+  }, [user?.focus_mode_preference, user?.theme_preference, user]);
+
+  const handleToggleFocusMode = useCallback(async () => {
+    const next = !isFocusMode;
+    setIsFocusMode(next);
+    try {
+      await updateAccountPreferences({ focus_mode_preference: next });
+    } catch (error) {
+      setIsFocusMode(!next);
+      toast(error.message || t('Unable to save focus mode right now.'), 'error');
+    }
+  }, [isFocusMode, t, toast, updateAccountPreferences]);
+
+  const handleToggleThemePreference = useCallback(async () => {
+    const next = !isCompactMode;
+    setIsCompactMode(next);
+    try {
+      await updateAccountPreferences({ theme_preference: next ? 'compact' : 'comfort' });
+    } catch (error) {
+      setIsCompactMode(!next);
+      toast(error.message || t('Unable to save layout preference right now.'), 'error');
+    }
+  }, [isCompactMode, t, toast, updateAccountPreferences]);
 
   const handleOpenHome = () => {
     if (!user?.role) return;
@@ -279,7 +292,7 @@ export function AppLayout() {
         id: 'quick-density',
         title: isCompactMode ? t('layout.comfortView') : t('layout.compactView'),
         meta: t('layout.quickDensityHint'),
-        onSelect: () => setIsCompactMode((current) => !current),
+        onSelect: handleToggleThemePreference,
         active: isCompactMode,
       },
     ];
@@ -309,7 +322,7 @@ export function AppLayout() {
       : [];
 
     return [...baseItems, ...routeItems, ...signOutItem];
-  }, [ROLE_HOME, canAccessPath, isCompactMode, location.pathname, logout, navigate, sectionLabel, t, user?.role]);
+  }, [ROLE_HOME, canAccessPath, handleToggleThemePreference, isCompactMode, location.pathname, logout, navigate, sectionLabel, t, user?.role]);
 
   const filteredQuickActions = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
@@ -334,16 +347,6 @@ export function AppLayout() {
     if (!isCommandOpen) setCommandQuery('');
   }, [isCommandOpen]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(FOCUS_MODE_STORAGE_KEY, String(isFocusMode));
-  }, [isFocusMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(COMPACT_MODE_STORAGE_KEY, String(isCompactMode));
-  }, [isCompactMode]);
-
   const handleSelectAction = async (action) => {
     setIsCommandOpen(false);
     setCommandQuery('');
@@ -362,19 +365,14 @@ export function AppLayout() {
             <div className="app-topbar-eyebrow">{workspaceCopy.eyebrow}</div>
             <h1 className="app-topbar-title">{currentPageLabel}</h1>
             <p className="app-topbar-subtitle">{workspaceCopy.summary}</p>
-            <div className="app-topbar-pills">
-              {workspaceHighlights.map((item, index) => (
-                <span key={`${item}-${index}`} className="app-topbar-pill">{item}</span>
-              ))}
-            </div>
           </div>
 
           <div className="app-topbar-actions">
             <span className="app-topbar-date">{dateLabel}</span>
-            <button type="button" className="app-topbar-btn" onClick={() => setIsFocusMode((current) => !current)}>
+            <button type="button" className="app-topbar-btn" onClick={handleToggleFocusMode}>
               {isFocusMode ? t('layout.showSidebar') : t('layout.focusMode')}
             </button>
-            <button type="button" className="app-topbar-btn" onClick={() => setIsCompactMode((current) => !current)}>
+            <button type="button" className="app-topbar-btn" onClick={handleToggleThemePreference}>
               {isCompactMode ? t('layout.comfortView') : t('layout.compactView')}
             </button>
             <button type="button" className="app-topbar-btn accent" onClick={() => setIsCommandOpen(true)}>

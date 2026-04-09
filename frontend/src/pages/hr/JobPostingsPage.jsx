@@ -145,6 +145,13 @@ export function HRJobPostingsPage() {
     return 'green';
   };
 
+  const getHiringTone = (item) => {
+    if (item?.followUpState === 'Overdue' || item?.slaState === 'Overdue') return 'red';
+    if (item?.followUpState === 'At Risk' || item?.slaState === 'At Risk') return 'orange';
+    if (item?.followUpState === 'Paused') return 'gray';
+    return 'green';
+  };
+
   const formatDateLabel = (value) => {
     if (!value) return t('No recent activity');
     try {
@@ -153,6 +160,73 @@ export function HRJobPostingsPage() {
       return '—';
     }
   };
+
+  const urgentRoleCount = jobBreakdown.filter((item) => item.followUpState === 'Overdue').length;
+  const sourcingGapCount = jobBreakdown.filter((item) => item.isActive && Number(item.applicantCount || 0) === 0).length;
+  const lateStageCount = followUpItems.filter((item) => ['Shortlisted', 'Interview'].includes(item.reviewStage)).length;
+  const readyBenchCount = jobBreakdown.filter((item) => Number(item.talentPoolCount || 0) > 0).length;
+
+  const hiringFocusQueue = useMemo(() => {
+    const stateRank = { Overdue: 4, 'At Risk': 3, 'On Track': 2, Paused: 1 };
+    return [...jobBreakdown]
+      .filter((item) => item.followUpState !== 'On Track' || (item.isActive && Number(item.applicantCount || 0) === 0))
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(b.staleCandidates || 0) - Number(a.staleCandidates || 0)
+        || Number(a.applicantCount || 0) - Number(b.applicantCount || 0)
+        || Number(b.daysOpen || 0) - Number(a.daysOpen || 0))
+      .slice(0, 4);
+  }, [jobBreakdown]);
+
+  const recruitmentPressureMap = useMemo(() => {
+    return [...jobBreakdown]
+      .filter((item) => item.isActive || Number(item.staleCandidates || 0) > 0)
+      .sort((a, b) => Number(b.staleCandidates || 0) - Number(a.staleCandidates || 0)
+        || Number(a.applicantCount || 0) - Number(b.applicantCount || 0)
+        || Number(b.talentPoolCount || 0) - Number(a.talentPoolCount || 0))
+      .slice(0, 4);
+  }, [jobBreakdown]);
+
+  const hiringPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (urgentRoleCount > 0) {
+      plays.push({
+        title: t('Unblock overdue hiring decisions'),
+        note: t('Start with roles carrying overdue candidates so interviews and offers do not stall in the funnel.'),
+      });
+    }
+    if (sourcingGapCount > 0) {
+      plays.push({
+        title: t('Restart quiet requisitions'),
+        note: t('Active roles without applicants need refreshed outreach, referral pushes, or updated visibility this week.'),
+      });
+    }
+    if (lateStageCount > 0) {
+      plays.push({
+        title: t('Move finalists across the line'),
+        note: t('Shortlisted and interview-stage candidates should get a quick decision rhythm to protect acceptance rates.'),
+      });
+    }
+    if (readyBenchCount > 0) {
+      plays.push({
+        title: t('Lean on the talent pool'),
+        note: t('Roles with talent-pool coverage can reopen warm conversations faster than starting from zero.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep pipeline momentum steady'),
+      note: t('The funnel looks balanced right now, so keep screening and decision SLAs consistent across open roles.'),
+    }];
+  }, [lateStageCount, readyBenchCount, sourcingGapCount, t, urgentRoleCount]);
+
+  const strongestSignal = urgentRoleCount > 0
+    ? t('Some open roles now have overdue candidate decisions, so the biggest hiring win is clearing blocked interview or offer follow-up.')
+    : sourcingGapCount > 0
+      ? t('Several active roles still have little or no inbound coverage, so sourcing visibility is the next recruiting priority.')
+      : lateStageCount > 0
+        ? t('Finalists are in motion; keeping interview and offer decisions fast will protect recruiting momentum.')
+        : t('Recruitment momentum looks steady, with the current funnel staying broadly on track.');
 
   const handleExportPipelineHealth = () => {
     try {
@@ -437,6 +511,129 @@ export function HRJobPostingsPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {pipelineHealth ? (
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 28 }}>
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="hr-surface-card" style={{ padding: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Recruitment Acceleration Radar')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                {[
+                  { label: t('Overdue Roles'), value: urgentRoleCount, color: '#E8321A', note: t('Open roles carrying overdue candidate decisions.') },
+                  { label: t('Sourcing Gaps'), value: sourcingGapCount, color: '#F59E0B', note: t('Active requisitions still missing applicant coverage.') },
+                  { label: t('Late-Stage Moves'), value: lateStageCount, color: '#2563EB', note: t('Shortlist or interview decisions waiting for action.') },
+                  { label: t('Bench-Ready Roles'), value: readyBenchCount, color: '#7C3AED', note: t('Roles with talent-pool depth ready to reuse.') },
+                ].map((item) => (
+                  <div key={item.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '14px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{item.label}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: item.color }}>{item.value}</div>
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 14, borderRadius: 14, border: '1px solid #FDE68A', background: '#FFFBEB', padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', marginBottom: 6 }}>{t('Strongest signal')}</div>
+                <div style={{ fontSize: 13.5, color: '#92400E' }}>{strongestSignal}</div>
+              </div>
+            </div>
+
+            <div className="hr-table-card" style={{ overflow: 'hidden' }}>
+              <div style={{ padding: '18px 20px', borderBottom: '1px solid #F3F4F6' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t('Priority Hiring Queue')}</h3>
+              </div>
+              {hiringFocusQueue.length === 0 ? (
+                <div className="hr-soft-empty" style={{ padding: '24px 18px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('No roles need immediate recruiting intervention right now.')}</p>
+                </div>
+              ) : (
+                <div style={{ padding: '8px 0' }}>
+                  {hiringFocusQueue.map((item) => (
+                    <div key={item.jobID} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{item.jobTitle}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
+                          {item.applicantCount ?? 0} {t('applicants')} · {item.staleCandidates ?? 0} {t('stale')} · {item.talentPoolCount ?? 0} {t('in talent pool')}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)', marginTop: 4 }}>
+                          {item.followUpState === 'Overdue'
+                            ? t('Candidate decisions are aging for this role and should be cleared first.')
+                            : Number(item.applicantCount || 0) === 0
+                              ? t('This active role needs fresh sourcing coverage and visibility.')
+                              : t('This role is carrying enough funnel pressure to justify quick recruiter attention.')}
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+                        <Badge label={t(item.followUpState)} color={getHiringTone(item)} />
+                        <Btn
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => navigate(resolvePath(Number(item.applicantCount || 0) > 0 ? `/hr/cv-ranking?job=${item.jobID}` : '/hr/jobs'))}
+                        >
+                          {t('Review')}
+                        </Btn>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="hr-surface-card" style={{ padding: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Recruiter Playbook')}</div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {hiringPlaybook.map((play) => (
+                  <div key={play.title} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{play.title}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{play.note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="hr-surface-card" style={{ padding: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Role Pressure Map')}</div>
+              {recruitmentPressureMap.length === 0 ? (
+                <div className="hr-soft-empty" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('Role pressure is balanced right now.')}</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {recruitmentPressureMap.map((item) => (
+                    <div key={`pressure-${item.jobID}`} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{item.jobTitle}</div>
+                          <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
+                            {item.daysOpen ?? 0} {t('days open')} · {item.averageAtsScore ?? 0} {t('avg ATS')}
+                          </div>
+                        </div>
+                        <Badge label={t(item.followUpState)} color={getHiringTone(item)} />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginTop: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Applicants')}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.applicantCount ?? 0}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Stale')}</div>
+                          <div style={{ fontWeight: 700, color: '#E8321A' }}>{item.staleCandidates ?? 0}</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Talent Pool')}</div>
+                          <div style={{ fontWeight: 700, color: '#7C3AED' }}>{item.talentPoolCount ?? 0}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}

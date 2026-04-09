@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   employmentStatus: 'Active',
   yearsAtCompany: '',
   monthlyIncome: '',
+  currency_preference: 'EGP',
 };
 
 const EMPTY_ROLE_CHANGE = {
@@ -36,6 +37,7 @@ const EMPTY_ROLE_CHANGE = {
   department: '',
   team: '',
   monthlyIncome: '',
+  currency_preference: 'EGP',
   notes: '',
 };
 
@@ -43,6 +45,7 @@ const ROLE_OPTIONS = ['TeamMember', 'TeamLeader', 'HRManager', 'Admin'];
 const TYPE_OPTIONS = ['Full-time', 'Part-time', 'Contract', 'Intern'];
 const STATUS_OPTIONS = ['Active', 'Probation', 'On Leave'];
 const ACTION_OPTIONS = ['Promotion', 'Demotion', 'Role Change'];
+const CURRENCY_OPTIONS = ['EGP', 'USD'];
 const EMPTY_ROSTER_HEALTH = { summary: {}, departmentBreakdown: [], followUpItems: [] };
 
 const selectStyle = {
@@ -61,9 +64,14 @@ function uniqueValues(items, key) {
   return [...new Set(items.map(item => item?.[key]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b)));
 }
 
-function formatMoney(value) {
+function formatMoney(value, currency = 'EGP') {
   if (value === null || value === undefined || value === '') return '—';
-  return `EGP ${Number(value).toLocaleString()}`;
+  const locale = typeof document !== 'undefined' && document.documentElement.lang === 'ar' ? 'ar-EG' : 'en-US';
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: currency || 'EGP',
+    minimumFractionDigits: 2,
+  }).format(Number(value || 0));
 }
 
 function downloadTextFile(filename, content, mimeType = 'text/csv;charset=utf-8') {
@@ -201,6 +209,49 @@ export function HREmployeesPage() {
       accent: dataQuality.coveragePct >= 80 ? '#16A34A' : '#E8321A',
     },
   ]), [activeCount, dataQuality.coveragePct, employees.length, followUpCount, rosterSummary.followUpCount, t]);
+  const rosterFollowUpItems = rosterHealth?.followUpItems || [];
+  const departmentPressureMap = rosterHealth?.departmentBreakdown || [];
+  const highPriorityRosterItems = rosterFollowUpItems.filter((item) => item.priority === 'High').length;
+  const spotlightQueue = useMemo(() => (
+    [...rosterFollowUpItems]
+      .sort((a, b) => {
+        const priorityScore = { High: 3, Medium: 2, Watch: 1 };
+        return (priorityScore[b.priority] || 0) - (priorityScore[a.priority] || 0)
+          || Number(b.riskScore || 0) - Number(a.riskScore || 0)
+          || (b.flags?.length || 0) - (a.flags?.length || 0);
+      })
+      .slice(0, 4)
+  ), [rosterFollowUpItems]);
+  const workforcePlaybook = useMemo(() => {
+    const plays = [];
+
+    if ((rosterSummary.incompleteProfiles ?? 0) > 0) {
+      plays.push({
+        title: t('Close profile gaps'),
+        note: t('Complete missing location, department, title, and payroll fields so HR decisions rely on cleaner records.'),
+      });
+    }
+    if ((rosterSummary.attritionFollowUp ?? followUpCount) > 0) {
+      plays.push({
+        title: t('Check retention-sensitive cases'),
+        note: t('Review employees with medium or high attrition watch signals before the next manager or talent review.'),
+      });
+    }
+    if (dataQuality.probationCount > 0 || dataQuality.onLeaveCount > 0) {
+      plays.push({
+        title: t('Review transition planning'),
+        note: t('Probation and leave cases often need clearer goals, handover coverage, or return-to-work planning.'),
+      });
+    }
+    if (!plays.length) {
+      plays.push({
+        title: t('Maintain workforce hygiene'),
+        note: t('The directory looks healthy right now, so keep the same audit rhythm and spot-check follow-up process.'),
+      });
+    }
+
+    return plays.slice(0, 3);
+  }, [dataQuality.onLeaveCount, dataQuality.probationCount, followUpCount, rosterSummary.attritionFollowUp, rosterSummary.incompleteProfiles, t]);
   const formatDate = (value) => (value ? new Date(value).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US') : '—');
   const formatDateTime = (value) => (value ? new Date(value).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US') : '—');
   const riskColor = (level) => {
@@ -251,6 +302,7 @@ export function HREmployeesPage() {
       department: employee.department || '',
       team: employee.team || '',
       monthlyIncome: employee.monthlyIncome ?? '',
+      currency_preference: employee.currency_preference || 'EGP',
       notes: '',
     });
     setShowRoleChange(true);
@@ -365,7 +417,7 @@ export function HREmployeesPage() {
 
   const handleExportEmployees = () => {
     const rows = [
-      ['Employee ID', 'Full Name', 'Email', 'Job Title', 'Department', 'Team', 'Role', 'Type', 'Location', 'Status', 'Monthly Income', 'Attrition Risk'],
+      ['Employee ID', 'Full Name', 'Email', 'Job Title', 'Department', 'Team', 'Role', 'Type', 'Location', 'Status', 'Monthly Income', 'Currency', 'Attrition Risk'],
       ...filteredEmployees.map((employee) => [
         employee.employeeID || '',
         employee.fullName || '',
@@ -378,6 +430,7 @@ export function HREmployeesPage() {
         employee.location || '',
         employee.employmentStatus || '',
         employee.monthlyIncome ?? '',
+        employee.currency_preference || 'EGP',
         employeeRisks[employee.employeeID]?.riskLevel || '',
       ]),
     ];
@@ -457,9 +510,15 @@ export function HREmployeesPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         <Input label={t('Years at Company')} type="number" min="0" value={form.yearsAtCompany} onChange={setField('yearsAtCompany')} placeholder="0" />
         <Input label={t('Monthly Income')} type="number" min="0" value={form.monthlyIncome} onChange={setField('monthlyIncome')} placeholder="0" />
+        <div>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{t('layout.currency')}</label>
+          <select value={form.currency_preference} onChange={setField('currency_preference')} style={selectStyle}>
+            {CURRENCY_OPTIONS.map(option => <option key={option} value={option}>{t(`currency.${option}`)}</option>)}
+          </select>
+        </div>
       </div>
     </div>
   );
@@ -542,6 +601,111 @@ export function HREmployeesPage() {
             <div style={{ fontSize: 32, fontWeight: 700, color: card.color || 'var(--gray-900)' }}>{card.value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="hr-surface-card" style={{ padding: 18, marginBottom: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{t('Workforce Spotlight Hub')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring priority people, department pressure, and the next HR follow-up moves into one review layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={highPriorityRosterItems > 0 ? 'red' : 'green'} label={`${t('High priority')} ${highPriorityRosterItems}`} />
+            <Btn size="sm" variant="ghost" onClick={handleExportRosterHealth}>{t('Export Roster CSV')}</Btn>
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Priority People'),
+              value: highPriorityRosterItems,
+              note: t('Employees needing the fastest HR attention based on the current roster watch.'),
+              accent: highPriorityRosterItems > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Attrition Watch'),
+              value: rosterSummary.attritionFollowUp ?? followUpCount,
+              note: t('Retention-sensitive profiles already appearing in the current review queue.'),
+              accent: (rosterSummary.attritionFollowUp ?? followUpCount) > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Transitions'),
+              value: dataQuality.probationCount + dataQuality.onLeaveCount,
+              note: t('Probation and leave cases that may need planning or follow-up.'),
+              accent: '#2563EB',
+            },
+            {
+              label: t('Department Pressure'),
+              value: departmentPressureMap.filter((item) => (item.followUpCount || 0) > 0).length,
+              note: t('Departments currently carrying workforce cleanup or risk follow-up load.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Priority People Radar')}</div>
+            {spotlightQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No high-touch workforce follow-up items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {spotlightQueue.map((item) => (
+                  <div key={item.employeeID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge label={t(item.priority)} color={item.priority === 'High' ? 'red' : item.priority === 'Medium' ? 'orange' : 'gray'} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 6 }}>{item.department || '—'} • {item.jobTitle || '—'} • {t(item.employmentStatus || 'Unknown')}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                      {(item.flags || []).slice(0, 3).map((flag) => <Badge key={`${item.employeeID}-${flag}`} label={t(flag)} color="accent" />)}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 8 }}>{t(item.recommendedAction)}</div>
+                    <Btn
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const matched = employees.find((employee) => String(employee.employeeID) === String(item.employeeID));
+                        if (matched) openSnapshotModal(matched);
+                      }}
+                    >
+                      {t('Open 360 View')}
+                    </Btn>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('HR Playbook')}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+              {workforcePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 8 }}>{t('Department Pressure Map')}</div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {departmentPressureMap.slice(0, 4).map((item) => (
+                <div key={item.department} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #E7EAEE' }}>
+                  <span style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{item.department}</span>
+                  <strong style={{ fontSize: 12.5 }}>{item.followUpCount} • {t('High')}: {item.highPriorityCount}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 22 }}>
@@ -711,7 +875,8 @@ export function HREmployeesPage() {
                       {employeeRisk && (
                         <Badge label={`${t('Attrition Risk')}: ${t(employeeRisk.riskLevel)}`} color={riskColor(employeeRisk.riskLevel)} />
                       )}
-                      <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{t('Salary')}: {formatMoney(employee.monthlyIncome)}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{t('Salary')}: {formatMoney(employee.monthlyIncome, employee.currency_preference)}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>{t('layout.currency')}: {employee.currency_preference || 'EGP'}</span>
                     </div>
                   </td>
                   <td style={{ padding: '16px 20px' }}>
@@ -762,9 +927,15 @@ export function HREmployeesPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <DatalistInput label={t('New Job Title')} value={roleChange.jobTitle} options={jobTitles} onChange={setRoleChangeField('jobTitle')} placeholder="Select or type a job title" />
           <Input label={t('New Monthly Income')} type="number" min="0" value={roleChange.monthlyIncome} onChange={setRoleChangeField('monthlyIncome')} placeholder="e.g. 18000" />
+          <div>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{t('layout.currency')}</label>
+            <select value={roleChange.currency_preference} onChange={setRoleChangeField('currency_preference')} style={selectStyle}>
+              {CURRENCY_OPTIONS.map(option => <option key={option} value={option}>{t(`currency.${option}`)}</option>)}
+            </select>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -803,7 +974,7 @@ export function HREmployeesPage() {
                   <div><strong>Role:</strong> {item.previousRole || '—'} → {item.newRole || '—'}</div>
                   <div><strong>Department:</strong> {item.previousDepartment || '—'} → {item.newDepartment || '—'}</div>
                   <div><strong>Team:</strong> {item.previousTeam || '—'} → {item.newTeam || '—'}</div>
-                  <div><strong>Salary:</strong> {formatMoney(item.previousMonthlyIncome)} → {formatMoney(item.newMonthlyIncome)}</div>
+                  <div><strong>Salary:</strong> {formatMoney(item.previousMonthlyIncome, selected?.currency_preference)} → {formatMoney(item.newMonthlyIncome, selected?.currency_preference)}</div>
                 </div>
                 {item.notes && (
                   <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--gray-600)' }}>

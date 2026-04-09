@@ -45,6 +45,13 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getSuccessionTone = (item) => {
+  if (item?.retentionRisk === 'High' || item?.status === 'On Hold') return 'red';
+  if (item?.retentionRisk === 'Medium' || item?.status === 'Active') return 'orange';
+  if (item?.status === 'Completed' || item?.status === 'Acknowledged') return 'green';
+  return 'accent';
+};
+
 export function HRSuccessionPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -85,6 +92,93 @@ export function HRSuccessionPage() {
     highRisk: watchSummary.highRiskCount ?? plans.filter((plan) => plan.retentionRisk === 'High').length,
     acknowledged: watchSummary.acknowledgedCount ?? plans.filter((plan) => plan.status === 'Acknowledged').length,
   }), [plans, watchSummary]);
+
+  const readySoonCount = useMemo(
+    () => readinessBreakdown.find((item) => item.readiness === '6-12 Months')?.count
+      ?? plans.filter((plan) => plan.readiness === '6-12 Months').length,
+    [plans, readinessBreakdown],
+  );
+  const onHoldCount = watchSummary.onHoldCount ?? plans.filter((plan) => plan.status === 'On Hold').length;
+  const successionSpotlights = useMemo(() => {
+    const riskRank = { High: 3, Medium: 2, Low: 1 };
+    const statusRank = { 'On Hold': 3, Active: 2, 'On Track': 1, Acknowledged: 1, Completed: 0 };
+    const readinessRank = { 'Ready Now': 0, '6-12 Months': 1, '1-2 Years': 2, 'Long Term': 3 };
+
+    const source = (followUpItems.length ? followUpItems : plans).map((item) => ({
+      ...item,
+      employeeName: item.employeeName || item.employeeID,
+      summary: item.summary || item.developmentActions || item.notes || 'Review this successor in the next talent meeting.',
+    }));
+
+    return source
+      .sort((a, b) => (riskRank[b.retentionRisk] || 0) - (riskRank[a.retentionRisk] || 0)
+        || (statusRank[b.status] || 0) - (statusRank[a.status] || 0)
+        || (readinessRank[a.readiness] || 9) - (readinessRank[b.readiness] || 9)
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [followUpItems, plans]);
+  const departmentPressureMap = useMemo(() => {
+    const map = new Map();
+
+    plans.forEach((plan) => {
+      const key = plan.department || 'Unassigned';
+      const current = map.get(key) || {
+        department: key,
+        total: 0,
+        readyNow: 0,
+        highRisk: 0,
+        onHold: 0,
+      };
+
+      current.total += 1;
+      if (plan.readiness === 'Ready Now') current.readyNow += 1;
+      if (plan.retentionRisk === 'High') current.highRisk += 1;
+      if (plan.status === 'On Hold') current.onHold += 1;
+      map.set(key, current);
+    });
+
+    return [...map.values()]
+      .sort((a, b) => b.highRisk - a.highRisk || b.readyNow - a.readyNow || b.total - a.total)
+      .slice(0, 4);
+  }, [plans]);
+  const successionPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (stats.highRisk > 0) {
+      plays.push({
+        title: t('Protect high-risk successors'),
+        note: t('Pair retention conversations with a clear next-step plan for bench-critical employees.'),
+      });
+    }
+    if (stats.readyNow > 0) {
+      plays.push({
+        title: t('Activate ready-now talent'),
+        note: t('Use ready-now successors for shadowing, stretch work, or near-term coverage planning.'),
+      });
+    }
+    if (onHoldCount > 0) {
+      plays.push({
+        title: t('Unblock stalled plans'),
+        note: t('Review on-hold succession plans with leaders and identify the blocker before the next talent review.'),
+      });
+    }
+    if (readySoonCount > 0) {
+      plays.push({
+        title: t('Build the 6-12 month bench'),
+        note: t('Focus development actions on successors who are close to readiness but still need targeted growth.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain bench health'),
+      note: t('Current succession plans look balanced, so keep the same quarterly talent-review cadence.'),
+    }];
+  }, [onHoldCount, readySoonCount, stats.highRisk, stats.readyNow, t]);
+  const strongestSignal = stats.highRisk > 0
+    ? t('High-risk successors need a retention and readiness check before the next leadership review.')
+    : stats.readyNow > 0
+      ? t('There is ready-now bench strength available for near-term movement and coverage planning.')
+      : t('The bench looks steady; focus next on developing the 6-12 month successor pool.');
 
   const targetRoles = useMemo(() => [...new Set(plans.map((plan) => plan.targetRole).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [plans]);
 
@@ -196,6 +290,96 @@ export function HRSuccessionPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Succession Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Pull the strongest readiness, bench-risk, and continuity signals into one executive planning layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={stats.highRisk > 0 ? 'red' : 'green'} label={`${t('High Risk')} ${stats.highRisk}`} />
+            <Badge color={stats.readyNow > 0 ? 'accent' : 'gray'} label={`${t('Ready Now')} ${stats.readyNow}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Ready Now'),
+              value: stats.readyNow,
+              note: t('Successors already close to a role transition or stretch assignment.'),
+              accent: stats.readyNow > 0 ? '#7C3AED' : '#94A3B8',
+            },
+            {
+              label: t('6-12 Months'),
+              value: readySoonCount,
+              note: t('Bench talent that can become promotable with focused development work.'),
+              accent: readySoonCount > 0 ? '#2563EB' : '#94A3B8',
+            },
+            {
+              label: t('On Hold'),
+              value: onHoldCount,
+              note: t('Plans that need a fresh conversation or blocker removal.'),
+              accent: onHoldCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Follow-Up Queue'),
+              value: followUpItems.length,
+              note: t('Succession items currently flagged for HR or leadership review.'),
+              accent: followUpItems.length > 0 ? '#F59E0B' : '#22C55E',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Successors')}</div>
+            {successionSpotlights.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No succession priorities are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {successionSpotlights.map((item, index) => (
+                  <div key={`${item.planID || item.employeeID}-${index}`} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName || item.employeeID}</strong>
+                      <Badge color={getSuccessionTone(item)} label={t(item.status || 'Active')} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.targetRole || '—'} • {t(item.readiness || 'Long Term')} • {t(item.status || 'Active')}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={`${t('Risk')}: ${t(item.retentionRisk || 'Low')}`} />
+                      <Badge color="gray" label={`${t('Department')}: ${item.department || '—'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Executive Succession Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {successionPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.15fr .85fr', marginBottom: 24 }}>
         <div className="hr-surface-card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -244,6 +428,26 @@ export function HRSuccessionPage() {
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                     {item.followUpCount ?? 0} {t('follow-up')} · {item.highRiskCount ?? 0} {t('high risk')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', margin: '16px 0 10px' }}>{t('Department Pressure')}</div>
+          {departmentPressureMap.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Department succession signals will appear as plans are created.')}</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {departmentPressureMap.map((item) => (
+                <div key={item.department} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E7EAEE', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gray-700)' }}>{item.department}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 2 }}>{item.total} {t('Plans')} • {item.readyNow} {t('Ready Now')}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: 11.5, fontWeight: 700 }}>
+                    <div style={{ color: item.highRisk > 0 ? '#E8321A' : 'var(--gray-500)' }}>{item.highRisk} {t('High Risk')}</div>
+                    <div style={{ color: item.onHold > 0 ? '#F59E0B' : 'var(--gray-500)', marginTop: 2 }}>{item.onHold} {t('On Hold')}</div>
                   </div>
                 </div>
               ))}

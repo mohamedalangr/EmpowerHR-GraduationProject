@@ -38,6 +38,26 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const formatMoney = (value, language = 'en') => {
+  const number = Number(value || 0);
+  const preferredCurrency = typeof document !== 'undefined'
+    ? (document.documentElement.dataset.currencyPreference || 'EGP')
+    : 'EGP';
+  return new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+    style: 'currency',
+    currency: preferredCurrency,
+    minimumFractionDigits: 2,
+  }).format(number);
+};
+
+const getExpenseTone = (item) => {
+  if (item?.followUpState === 'Overdue Review') return 'red';
+  if (item?.followUpState === 'Needs Review' || item?.status === 'Submitted') return 'orange';
+  if (item?.followUpState === 'Awaiting Reimbursement' || item?.status === 'Approved') return 'yellow';
+  if (item?.status === 'Reimbursed') return 'green';
+  return 'accent';
+};
+
 export function HRExpensesPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -88,6 +108,64 @@ export function HRExpensesPage() {
       .reduce((sum, item) => sum + Number(item.amount || 0), 0),
     followUp: watchSummary.followUpCount ?? 0,
   }), [claims, watchSummary]);
+
+  const overdueCount = watchSummary.overdueCount ?? followUpItems.filter((item) => item.followUpState === 'Overdue Review').length;
+  const awaitingReimbursementCount = claims.filter((item) => item.status === 'Approved').length;
+  const totalClaimedAmount = watchSummary.totalAmount ?? claims.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const averageClaimValue = stats.total ? totalClaimedAmount / stats.total : 0;
+  const expenseFocusQueue = useMemo(() => {
+    const stateRank = { 'Overdue Review': 3, 'Needs Review': 2, 'Awaiting Reimbursement': 1 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(b.ageDays || 0) - Number(a.ageDays || 0)
+        || Number(b.amount || 0) - Number(a.amount || 0))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const expensePressureMap = useMemo(() => {
+    return [...categoryBreakdown]
+      .sort((a, b) => Number(b.submittedCount || 0) - Number(a.submittedCount || 0)
+        || Number(b.approvedCount || 0) - Number(a.approvedCount || 0)
+        || Number(b.amount || 0) - Number(a.amount || 0))
+      .slice(0, 4);
+  }, [categoryBreakdown]);
+  const expensePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (overdueCount > 0) {
+      plays.push({
+        title: t('Resolve the oldest claims first'),
+        note: t('Start with overdue reviews so small reimbursement issues do not turn into employee trust issues.'),
+      });
+    }
+    if (awaitingReimbursementCount > 0) {
+      plays.push({
+        title: t('Release approved payouts quickly'),
+        note: t('Approved claims should move to reimbursement fast so finance follow-through matches the approval promise.'),
+      });
+    }
+    if (stats.submitted > 0) {
+      plays.push({
+        title: t('Protect review SLA'),
+        note: t('Use short daily triage blocks to keep the submitted queue from aging into overdue review work.'),
+      });
+    }
+    if (expensePressureMap.some((item) => Number(item.submittedCount || 0) > 0 || Number(item.approvedCount || 0) > 0)) {
+      plays.push({
+        title: t('Watch the busiest spend category'),
+        note: t('Focus on the category with the highest open claim pressure to reduce the queue fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep reimbursement rhythm steady'),
+      note: t('Expense operations look stable, so keep approvals and payouts moving on the current cadence.'),
+    }];
+  }, [awaitingReimbursementCount, expensePressureMap, overdueCount, stats.submitted, t]);
+  const strongestSignal = overdueCount > 0
+    ? t('Some expense claims have been waiting too long for review and should be cleared before the backlog spreads.')
+    : awaitingReimbursementCount > 0
+      ? t('Approved claims are still waiting for payout, so the finance handoff is the next place to tighten.')
+      : t('Expense handling looks stable; keep the current pace so new claims do not age into exceptions.');
 
   const expensePulseCards = useMemo(() => ([
     {
@@ -210,7 +288,7 @@ export function HRExpensesPage() {
           {[
             { label: t('Claims'), value: stats.total, color: '#111827' },
             { label: t('Awaiting Review'), value: stats.submitted, color: '#E8321A' },
-            { label: t('Approved Value'), value: `$${stats.approvedAmount.toFixed(2)}`, color: '#10B981' },
+            { label: t('Approved Value'), value: formatMoney(stats.approvedAmount, language), color: '#10B981' },
             { label: t('Needs Follow-Up'), value: stats.followUp, color: '#F59E0B' },
           ].map((card) => (
             <div key={card.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
@@ -231,11 +309,101 @@ export function HRExpensesPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Expense Reimbursement Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring aging reviews, payout pressure, and spend hotspots into one finance-ready decision layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={overdueCount > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${overdueCount}`} />
+            <Badge color={awaitingReimbursementCount > 0 ? 'yellow' : 'gray'} label={`${t('Awaiting reimbursement')} ${awaitingReimbursementCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Overdue Reviews'),
+              value: overdueCount,
+              note: t('Claims already outside the expected review window and most likely to create frustration.'),
+              accent: overdueCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Awaiting Reimbursement'),
+              value: awaitingReimbursementCount,
+              note: t('Approved claims that still need the final payout step completed.'),
+              accent: awaitingReimbursementCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Claimed Value'),
+              value: formatMoney(totalClaimedAmount, language),
+              note: t('Total expense value currently represented across the tracked queue.'),
+              accent: '#2563EB',
+            },
+            {
+              label: t('Average Claim'),
+              value: formatMoney(averageClaimValue, language),
+              note: t('Typical reimbursement size to help spot unusually costly claims faster.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Reimbursement Queue')}</div>
+            {expenseFocusQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority expense items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {expenseFocusQueue.map((item) => (
+                  <div key={item.claimID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getExpenseTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.title} • {t(item.category)}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={formatMoney(item.amount, language)} />
+                      <Badge color="gray" label={`${item.ageDays ?? 0} ${t('days open')}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Finance Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {expensePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Claims', value: stats.total, accent: '#111827' },
           { label: 'Awaiting Review', value: stats.submitted, accent: '#E8321A' },
-          { label: 'Approved Value', value: `$${stats.approvedAmount.toFixed(2)}`, accent: '#10B981' },
+          { label: 'Approved Value', value: formatMoney(stats.approvedAmount, language), accent: '#10B981' },
           { label: 'Needs Follow-Up', value: stats.followUp, accent: '#F59E0B' },
         ].map((card) => (
           <div key={card.label} className="hr-stat-card" style={{ padding: '20px 24px' }}>
@@ -275,7 +443,7 @@ export function HRExpensesPage() {
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 4 }}>{item.summary}</div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
-                    ${Number(item.amount || 0).toFixed(2)} · {item.ageDays ?? 0} {t('days open')}
+                    {formatMoney(item.amount, language)} · {item.ageDays ?? 0} {t('days open')}
                   </div>
                 </div>
               ))}
@@ -284,19 +452,26 @@ export function HRExpensesPage() {
         </div>
 
         <div className="hr-surface-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Category Snapshot')}</div>
-          {categoryBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Category Pressure Map')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which expense categories are carrying the most open review or payout pressure.')}</div>
+          {expensePressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No expense summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {categoryBreakdown.map((item) => (
+              {expensePressureMap.map((item) => (
                 <div key={item.category} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{t(item.category)}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.count ?? 0}</span>
+                    <Badge
+                      color={Number(item.submittedCount || 0) > 0 ? 'orange' : Number(item.approvedCount || 0) > 0 ? 'yellow' : 'green'}
+                      label={`${item.count ?? 0} ${t('claims')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
-                    {item.submittedCount ?? 0} {t('submitted')} · {item.approvedCount ?? 0} {t('approved')} · ${Number(item.amount ?? 0).toFixed(2)}
+                    {item.submittedCount ?? 0} {t('submitted')} · {item.approvedCount ?? 0} {t('approved')} · {item.reimbursedCount ?? 0} {t('reimbursed')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {formatMoney(item.amount, language)} {t('tracked value in this category')}
                   </div>
                 </div>
               ))}
@@ -326,7 +501,7 @@ export function HRExpensesPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ fontWeight: 800, color: 'var(--red)' }}>${Number(item.amount || 0).toFixed(2)}</div>
+                    <div style={{ fontWeight: 800, color: 'var(--red)' }}>{formatMoney(item.amount, language)}</div>
                     <Badge label={t(item.status)} color={STATUS_COLORS[item.status] || 'gray'} />
                   </div>
                 </div>

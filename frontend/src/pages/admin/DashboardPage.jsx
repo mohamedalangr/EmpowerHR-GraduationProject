@@ -9,7 +9,7 @@ import {
   hrGetLeaveRequests,
   hrGetTickets,
 } from '../../api/index.js';
-import { Btn, Spinner, useToast } from '../../components/shared/index.jsx';
+import { Badge, Btn, Spinner, useToast } from '../../components/shared/index.jsx';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -124,6 +124,133 @@ export function AdminDashboardPage() {
     },
   ]), [employees.length, forms, jobs, queueCount, roleCounts, t]);
 
+  const serviceMatrix = useMemo(() => ([
+    {
+      key: 'approvals',
+      label: t('Approvals'),
+      value: leaveRequests.filter((item) => item?.status === 'Pending').length,
+      note: t('Pending leave decisions waiting for service review.'),
+      accent: '#E8321A',
+      path: resolvePath('/hr/approvals'),
+    },
+    {
+      key: 'expenses',
+      label: t('Expenses'),
+      value: expenses.filter((item) => ['Pending', 'Submitted'].includes(item?.status)).length,
+      note: t('Claims still moving through finance and manager review.'),
+      accent: '#B54708',
+      path: resolvePath('/hr/expenses'),
+    },
+    {
+      key: 'documents',
+      label: t('Documents'),
+      value: documents.filter((item) => ['Pending', 'In Progress'].includes(item?.status)).length,
+      note: t('Issuance and request items still active in the queue.'),
+      accent: '#2563EB',
+      path: resolvePath('/hr/documents'),
+    },
+    {
+      key: 'support',
+      label: t('Support'),
+      value: tickets.filter((item) => !['Resolved', 'Closed'].includes(item?.status)).length,
+      note: t('Open employee support issues that still need action.'),
+      accent: '#7C3AED',
+      path: resolvePath('/hr/tickets'),
+    },
+  ]), [documents, expenses, leaveRequests, resolvePath, t, tickets]);
+
+  const governanceRadar = useMemo(() => {
+    const admins = roleCounts.Admin || 0;
+    const leaders = roleCounts.TeamLeader || 0;
+    const hrManagers = roleCounts.HRManager || 0;
+    const missingRoleAssignments = employees.filter((employee) => !String(employee?.role || '').trim()).length;
+    const activeForms = forms.filter((item) => item?.isActive).length;
+    const openJobs = jobs.filter((job) => job?.is_active !== false).length;
+    const openSupport = tickets.filter((item) => !['Resolved', 'Closed'].includes(item?.status)).length;
+    const staleDocuments = documents.filter((item) => ['Pending', 'In Progress'].includes(item?.status)).length;
+
+    const items = [];
+
+    if (admins === 0 || hrManagers === 0) {
+      items.push({
+        title: t('Access governance gap'),
+        state: t('High'),
+        detail: t('Confirm admin and HR ownership coverage so service routes stay properly governed.'),
+      });
+    }
+    if (leaders === 0) {
+      items.push({
+        title: t('Leadership lane coverage'),
+        state: t('Medium'),
+        detail: t('No active team leader coverage is visible, which may slow team-level follow-up and approvals.'),
+      });
+    }
+    if (queueCount >= 8) {
+      items.push({
+        title: t('Queue pressure rising'),
+        state: t('High'),
+        detail: t('Service queues are building up across approvals, expenses, documents, or support work.'),
+      });
+    }
+    if (missingRoleAssignments > 0) {
+      items.push({
+        title: t('Role assignment cleanup'),
+        state: t('Medium'),
+        detail: `${missingRoleAssignments} ${t('profiles still need clearer role ownership or route alignment.')}`,
+      });
+    }
+    if (activeForms === 0 || openJobs === 0) {
+      items.push({
+        title: t('Hiring and feedback cadence'),
+        state: t('Watch'),
+        detail: t('One of the main engagement or hiring channels is currently quiet and may need review.'),
+      });
+    }
+    if (openSupport > 0 || staleDocuments > 0) {
+      items.push({
+        title: t('Service reliability watch'),
+        state: openSupport + staleDocuments > 6 ? t('High') : t('Medium'),
+        detail: t('Open support and document workloads should be reviewed to protect the employee experience.'),
+      });
+    }
+
+    if (!items.length) {
+      items.push({
+        title: t('Platform governance looks healthy'),
+        state: t('On Track'),
+        detail: t('Role coverage and service queues are currently balanced across the main workspaces.'),
+      });
+    }
+
+    const playbook = [];
+    if (queueCount > 0) {
+      playbook.push({
+        title: t('Reduce queue pressure'),
+        note: t('Start with the busiest service lane to prevent delays from spreading across approvals and support work.'),
+      });
+    }
+    if (missingRoleAssignments > 0) {
+      playbook.push({
+        title: t('Clean up route ownership'),
+        note: t('Check user-role alignment so people land in the correct workspace and responsibility lane.'),
+      });
+    }
+    if (activeForms === 0 || openJobs === 0) {
+      playbook.push({
+        title: t('Re-activate key workflows'),
+        note: t('Review hiring and engagement flow so candidate and employee-facing pipelines stay active.'),
+      });
+    }
+    if (!playbook.length) {
+      playbook.push({
+        title: t('Maintain the current operating rhythm'),
+        note: t('No major governance pressure is visible right now, so keep the current review cadence in place.'),
+      });
+    }
+
+    return { items: items.slice(0, 5), playbook: playbook.slice(0, 3) };
+  }, [documents, employees, forms, jobs, queueCount, roleCounts, t, tickets]);
+
   return (
     <div className="hr-page-shell">
       <div className="hr-page-header is-split">
@@ -195,6 +322,64 @@ export function AdminDashboardPage() {
             <div style={{ fontSize: 28, fontWeight: 700, color: card.accent }}>{card.value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Platform Governance Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Highlight route ownership, service health, and operating pressure before small issues turn into platform friction.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge label={`${t('Watch items')} ${governanceRadar.items.length}`} color={governanceRadar.items.some((item) => item.state === t('High')) ? 'red' : 'green'} />
+            <Badge label={`${t('Service lanes')} ${serviceMatrix.length}`} color="accent" />
+          </div>
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.05fr .95fr' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Watchlist')}</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {governanceRadar.items.map((item) => (
+                <div key={item.title} className="workspace-action-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                    <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
+                    <Badge label={item.state} color={item.state === t('High') ? 'red' : item.state === t('Medium') ? 'orange' : item.state === t('On Track') ? 'green' : 'gray'} />
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Admin Playbook')}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+              {governanceRadar.playbook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {serviceMatrix.map((service) => (
+                <button
+                  key={service.key}
+                  type="button"
+                  onClick={() => navigate(service.path)}
+                  style={{ textAlign: 'left', border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff', cursor: 'pointer' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: service.accent }}>{service.label}</div>
+                    <Badge label={String(service.value)} color={service.value > 0 ? 'orange' : 'green'} />
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{service.note}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.15fr .85fr', marginBottom: 24 }}>

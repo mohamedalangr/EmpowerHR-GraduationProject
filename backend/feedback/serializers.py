@@ -13,7 +13,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         fields = [
             'employeeID', 'fullName', 'email', 'jobTitle', 'team', 'department',
             'role', 'employeeType', 'location', 'employmentStatus', 'isDeleted',
-            'age', 'yearsAtCompany', 'monthlyIncome', 'performanceRating',
+            'age', 'yearsAtCompany', 'monthlyIncome', 'currency_preference', 'performanceRating',
             'numberOfPromotions', 'jobLevel', 'remoteWork'
         ]
 
@@ -24,7 +24,7 @@ class EmployeeCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             'employeeID', 'fullName', 'email', 'jobTitle', 'team', 'department',
             'role', 'employeeType', 'location', 'employmentStatus', 'age',
-            'yearsAtCompany', 'monthlyIncome', 'performanceRating',
+            'yearsAtCompany', 'monthlyIncome', 'currency_preference', 'performanceRating',
             'numberOfPromotions', 'jobLevel', 'remoteWork'
         ]
         read_only_fields = ['employeeID']
@@ -60,6 +60,10 @@ class EmployeeRoleChangeSerializer(serializers.Serializer):
     department = serializers.CharField(max_length=100, required=False, allow_blank=True)
     team = serializers.CharField(max_length=100, required=False, allow_blank=True)
     monthlyIncome = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    currency_preference = serializers.ChoiceField(
+        choices=[choice[0] for choice in Employee.CurrencyPreference.choices],
+        required=False,
+    )
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
@@ -132,7 +136,7 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
         model = PayrollRecord
         fields = [
             'payrollID', 'employeeID', 'employeeName', 'department', 'jobTitle',
-            'payPeriod', 'baseSalary', 'allowances', 'deductions', 'bonus',
+            'payPeriod', 'currency', 'baseSalary', 'allowances', 'deductions', 'bonus',
             'netPay', 'status', 'paymentDate', 'notes', 'createdAt'
         ]
 
@@ -140,6 +144,10 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
 class PayrollRecordCreateSerializer(serializers.Serializer):
     employeeID = serializers.CharField(max_length=50)
     payPeriod = serializers.RegexField(regex=r'^\d{4}-\d{2}$', max_length=20)
+    currency = serializers.ChoiceField(
+        choices=[choice[0] for choice in Employee.CurrencyPreference.choices],
+        required=False,
+    )
     baseSalary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     allowances = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     deductions = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)

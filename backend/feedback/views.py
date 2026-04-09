@@ -1341,6 +1341,7 @@ class HREmployeeRoleChangeView(APIView):
         new_department = data.get('department', employee.department)
         new_team = data.get('team', employee.team)
         new_income = data.get('monthlyIncome', employee.monthlyIncome)
+        new_currency = data.get('currency_preference', employee.currency_preference)
 
         if new_job_title != employee.jobTitle:
             employee.jobTitle = new_job_title
@@ -1357,6 +1358,9 @@ class HREmployeeRoleChangeView(APIView):
         if new_income != employee.monthlyIncome:
             employee.monthlyIncome = new_income
             updates['monthlyIncome'] = new_income
+        if new_currency != employee.currency_preference:
+            employee.currency_preference = new_currency
+            updates['currency_preference'] = new_currency
 
         if not updates:
             return Response({'error': 'No promotion/demotion changes were provided.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -4260,6 +4264,7 @@ class HRPayrollWatchView(APIView):
                     'employeeID': record.employee_id,
                     'department': department,
                     'payPeriod': record.payPeriod,
+                    'currency': record.currency or record.employee.currency_preference,
                     'status': record.status,
                     'followUpState': state,
                     'ageDays': age_days,
@@ -4345,10 +4350,16 @@ class HRPayrollListCreateView(APIView):
         allowances = serializer.validated_data.get('allowances', Decimal('0.00'))
         deductions = serializer.validated_data.get('deductions', Decimal('0.00'))
         bonus = serializer.validated_data.get('bonus', Decimal('0.00'))
+        currency = serializer.validated_data.get('currency') or employee.currency_preference or Employee.CurrencyPreference.EGP
+
+        if currency != employee.currency_preference:
+            employee.currency_preference = currency
+            employee.save(update_fields=['currency_preference'])
 
         payroll = PayrollRecord.objects.create(
             employee=employee,
             payPeriod=pay_period,
+            currency=currency,
             baseSalary=base_salary,
             allowances=allowances,
             deductions=deductions,

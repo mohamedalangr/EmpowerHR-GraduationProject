@@ -14,7 +14,17 @@ class EmployeeCreationForm(UserCreationForm):
 class EmployeeChangeForm(UserChangeForm):
     class Meta:
         model  = User
-        fields = ("email", "full_name", "role", "employee_id", "is_active")
+        fields = (
+            "email",
+            "full_name",
+            "role",
+            "employee_id",
+            "currency_preference",
+            "language_preference",
+            "theme_preference",
+            "focus_mode_preference",
+            "is_active",
+        )
 
 
 @admin.register(User)
@@ -22,14 +32,36 @@ class UserAdmin(BaseUserAdmin):
     form     = EmployeeChangeForm
     add_form = EmployeeCreationForm
 
-    list_display  = ["email", "full_name", "role", "employee_id", "is_active", "created_at"]
+    list_display  = [
+        "email",
+        "full_name",
+        "role",
+        "employee_id",
+        "currency_preference",
+        "language_preference",
+        "theme_preference",
+        "focus_mode_preference",
+        "is_active",
+        "created_at",
+    ]
     list_filter   = ["role", "is_active"]
     search_fields = ["email", "full_name", "employee_id"]
     ordering      = ["-created_at"]
 
     fieldsets = (
         (None,            {"fields": ("email", "password")}),
-        ("Personal info", {"fields": ("full_name", "role", "employee_id")}),
+        (
+            "Personal info",
+            {"fields": (
+                "full_name",
+                "role",
+                "employee_id",
+                "currency_preference",
+                "language_preference",
+                "theme_preference",
+                "focus_mode_preference",
+            )},
+        ),
         ("Permissions",   {"fields": ("is_active", "is_staff", "is_superuser")}),
     )
 

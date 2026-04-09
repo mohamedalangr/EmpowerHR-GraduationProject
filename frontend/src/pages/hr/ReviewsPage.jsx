@@ -75,6 +75,50 @@ export function HRReviewsPage() {
   }, [calibration, reviews]);
 
   const reviewPeriods = useMemo(() => [...new Set(reviews.map((review) => review.reviewPeriod).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [reviews]);
+  const calibrationFollowUps = calibration?.followUpItems || [];
+  const criticalCases = calibrationFollowUps.filter((item) => item.priority === 'Critical').length;
+  const lowRatedCases = calibrationFollowUps.filter((item) => Number(item.overallRating || 0) <= 2).length;
+  const readyNowTalent = (calibration?.readinessBreakdown || []).find((item) => item.readiness === 'Ready Now')?.count || 0;
+  const reviewSpotlights = useMemo(() => {
+    const priorityRank = { Critical: 3, High: 2, Opportunity: 1 };
+    return [...calibrationFollowUps]
+      .sort((a, b) => (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0)
+        || Number(a.overallRating || 0) - Number(b.overallRating || 0))
+      .slice(0, 4);
+  }, [calibrationFollowUps]);
+  const talentPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (criticalCases > 0) {
+      plays.push({
+        title: t('Escalate critical review cases'),
+        note: t('Start with the lowest-rated or highest-risk reviews before the next calibration or retention discussion.'),
+      });
+    }
+    if (stats.pendingAcknowledgements > 0) {
+      plays.push({
+        title: t('Close acknowledgement gaps'),
+        note: t('Ask managers and employees to close outstanding review acknowledgements so the cycle can move forward cleanly.'),
+      });
+    }
+    if (readyNowTalent > 0) {
+      plays.push({
+        title: t('Protect ready-now talent'),
+        note: t('Use succession-ready signals to discuss retention, stretch work, and internal growth opportunities.'),
+      });
+    }
+    if (lowRatedCases > 0) {
+      plays.push({
+        title: t('Coach lower-rated performers'),
+        note: t('Pair low ratings with a concrete manager follow-up and short-term development plan.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain current review rhythm'),
+      note: t('The current review set looks healthy, so keep the same review cadence and talent check-in pattern.'),
+    }];
+  }, [criticalCases, lowRatedCases, readyNowTalent, stats.pendingAcknowledgements, t]);
   const reviewPulseCards = useMemo(() => ([
     {
       label: t('Review Cycles'),
@@ -254,6 +298,97 @@ export function HRReviewsPage() {
             <div style={{ fontSize: 26, fontWeight: 700, color: card.accent }}>{card.value}</div>
           </div>
         ))}
+      </div>
+
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Talent Review Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring the most urgent review follow-up, succession readiness, and next HR actions into one calibration layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={criticalCases > 0 ? 'red' : 'green'} label={`${t('Critical')} ${criticalCases}`} />
+            <Badge color={readyNowTalent > 0 ? 'accent' : 'gray'} label={`${t('Ready Now')} ${readyNowTalent}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Critical Cases'),
+              value: criticalCases,
+              note: t('Reviews that may need immediate HR or leadership intervention.'),
+              accent: criticalCases > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Low Ratings'),
+              value: lowRatedCases,
+              note: t('Employees currently sitting in the lower performance band.'),
+              accent: lowRatedCases > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Ready-Now Talent'),
+              value: readyNowTalent,
+              note: t('People who may be ready for broader responsibility or succession discussion.'),
+              accent: '#7C3AED',
+            },
+            {
+              label: t('Pending Acknowledgment'),
+              value: stats.pendingAcknowledgements,
+              note: t('Review conversations that still need employee closure.'),
+              accent: stats.pendingAcknowledgements > 0 ? '#2563EB' : '#22C55E',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Review Queue')}</div>
+            {reviewSpotlights.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority talent review items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {reviewSpotlights.map((item) => (
+                  <div key={`${item.reviewID}-${item.employeeID}`} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={priorityTone(item.priority)} label={t(item.priority)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.reviewPeriod} • {t('Rating')}: {item.overallRating}/5 • {t(item.status)}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{t(item.recommendedAction)}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={`${t('Retention Risk')}: ${t(item.retentionRisk)}`} />
+                      <Badge color="gray" label={`${t('Readiness')}: ${t(item.readiness)}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('HR Calibration Playbook')}</div>
+            <div style={{ display: 'grid', gap: 10, marginBottom: 12 }}>
+              {talentPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/employees'))}>{t('nav.employees')}</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/succession'))}>{t('nav.succession')}</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => navigate(resolvePath('/hr/dashboard'))}>{t('nav.dashboard')}</Btn>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24, alignItems: 'start' }}>

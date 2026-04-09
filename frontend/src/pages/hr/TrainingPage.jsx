@@ -20,6 +20,13 @@ const EMPTY_COMPLIANCE = {
   followUpItems: [],
 };
 
+const getLearningTone = (item) => {
+  if (item?.dueState === 'Overdue') return 'red';
+  if (item?.dueState === 'Due Soon') return 'orange';
+  if ((item?.completionRate ?? 100) >= 90) return 'green';
+  return 'accent';
+};
+
 export function HRTrainingPage() {
   const toast = useToast();
   const { t } = useLanguage();
@@ -59,6 +66,65 @@ export function HRTrainingPage() {
     dueSoon: compliance?.summary?.dueSoonCourses ?? 0,
     overdue: compliance?.summary?.overdueCourses ?? 0,
   }), [compliance, courses]);
+
+  const complianceItems = compliance?.followUpItems || [];
+  const categoryBreakdown = compliance?.categoryBreakdown || [];
+  const atRiskAssignments = compliance?.summary?.atRiskAssignments ?? complianceItems.reduce((sum, item) => sum + Number(item.pendingEmployees || 0), 0);
+  const averageCompletionRate = compliance?.summary?.averageCompletionRate ?? (stats.assigned
+    ? Math.round((stats.completed / Math.max(stats.assigned, 1)) * 100)
+    : 0);
+  const trainingSpotlights = useMemo(() => {
+    const stateRank = { Overdue: 3, 'Due Soon': 2, 'On Track': 1 };
+    return [...complianceItems]
+      .sort((a, b) => (stateRank[b.dueState] || 0) - (stateRank[a.dueState] || 0)
+        || Number(b.pendingEmployees || 0) - Number(a.pendingEmployees || 0)
+        || Number(a.completionRate || 0) - Number(b.completionRate || 0))
+      .slice(0, 4);
+  }, [complianceItems]);
+  const learningPressureMap = useMemo(() => {
+    return [...categoryBreakdown]
+      .sort((a, b) => (Number(b.overdue || 0) + Number(b.dueSoon || 0)) - (Number(a.overdue || 0) + Number(a.dueSoon || 0))
+        || Number(b.courses || 0) - Number(a.courses || 0))
+      .slice(0, 4);
+  }, [categoryBreakdown]);
+  const learningPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (stats.overdue > 0) {
+      plays.push({
+        title: t('Recover overdue learning first'),
+        note: t('Start with overdue courses so mandatory compliance and critical skill gaps do not grow.'),
+      });
+    }
+    if (atRiskAssignments > 0) {
+      plays.push({
+        title: t('Follow up with at-risk learners'),
+        note: t('Use the flagged list to nudge employees and managers who are still behind on completion.'),
+      });
+    }
+    if (stats.dueSoon > 0) {
+      plays.push({
+        title: t('Prevent new overdue items'),
+        note: t('Send reminders before due-soon courses age into overdue compliance problems.'),
+      });
+    }
+    if (averageCompletionRate < 75) {
+      plays.push({
+        title: t('Raise learning completion rate'),
+        note: t('Low completion momentum suggests the team may need smaller deadlines or clearer owner follow-up.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain learning rhythm'),
+      note: t('Training completion looks steady, so keep the current reminder and review cadence.'),
+    }];
+  }, [atRiskAssignments, averageCompletionRate, stats.dueSoon, stats.overdue, t]);
+  const strongestSignal = stats.overdue > 0
+    ? t('Some learning items are already overdue and need recovery before the next compliance check-in.')
+    : atRiskAssignments > 0
+      ? t('At-risk assignments are clustering and should get manager follow-up this week.')
+      : t('Learning completion looks healthy; focus next on keeping due-soon items from slipping.');
 
   const courseTitles = useMemo(() => [...new Set(courses.map((course) => course.title).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b))), [courses]);
 
@@ -190,6 +256,95 @@ export function HRTrainingPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Learning Risk Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring the most urgent compliance, completion, and follow-up signals into one learning governance layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={stats.overdue > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${stats.overdue}`} />
+            <Badge color={atRiskAssignments > 0 ? 'orange' : 'gray'} label={`${t('At-Risk')} ${atRiskAssignments}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('At-Risk Assignments'),
+              value: atRiskAssignments,
+              note: t('Assignments currently needing extra nudges or manager follow-up.'),
+              accent: atRiskAssignments > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Overdue'),
+              value: stats.overdue,
+              note: t('Courses already beyond due date and requiring immediate recovery.'),
+              accent: stats.overdue > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Due Soon'),
+              value: stats.dueSoon,
+              note: t('Courses that can still be rescued before they become overdue.'),
+              accent: stats.dueSoon > 0 ? '#2563EB' : '#94A3B8',
+            },
+            {
+              label: t('Avg Completion Rate'),
+              value: `${averageCompletionRate}%`,
+              note: t('Overall learning completion momentum across assigned training.'),
+              accent: averageCompletionRate >= 80 ? '#10B981' : averageCompletionRate >= 60 ? '#F59E0B' : '#E8321A',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Learning Queue')}</div>
+            {trainingSpotlights.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority learning items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {trainingSpotlights.map((item) => (
+                  <div key={item.courseID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
+                      <Badge color={getLearningTone(item)} label={t(item.dueState)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.category)} • {t('Pending')}: {item.pendingEmployees} • {t('Completion')}: {item.completionRate}%</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{t(item.recommendedAction)}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={`${t('Due Date')}: ${item.dueDate || '—'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('HR Learning Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {learningPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -240,10 +395,10 @@ export function HRTrainingPage() {
           </div>
 
           <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Snapshot')}</div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
             {[
-              { label: 'At-Risk Assignments', value: compliance?.summary?.atRiskAssignments ?? 0 },
-              { label: 'Average Completion Rate', value: `${compliance?.summary?.averageCompletionRate ?? 0}%` },
+              { label: 'At-Risk Assignments', value: atRiskAssignments },
+              { label: 'Average Completion Rate', value: `${averageCompletionRate}%` },
             ].map((item) => (
               <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #E7EAEE' }}>
                 <span style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{t(item.label)}</span>
@@ -251,6 +406,25 @@ export function HRTrainingPage() {
               </div>
             ))}
           </div>
+
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Category Priority Map')}</div>
+          {learningPressureMap.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Category risk signals will appear as training is assigned and tracked.')}</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {learningPressureMap.map((item) => (
+                <div key={item.category} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#fff', border: '1px solid #E7EAEE', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gray-700)' }}>{t(item.category)}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 2 }}>{item.courses} {t('Courses')} • {item.dueSoon} {t('Due Soon')}</div>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: 11.5, fontWeight: 700, color: item.overdue > 0 ? '#E8321A' : 'var(--gray-500)' }}>
+                    {item.overdue} {t('Overdue')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

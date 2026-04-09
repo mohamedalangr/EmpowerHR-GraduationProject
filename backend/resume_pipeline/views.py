@@ -30,13 +30,30 @@ _PIPELINE_FUNCS = None
 def _get_pipeline_functions():
     global _PIPELINE_FUNCS
     if _PIPELINE_FUNCS is None:
-        from .pipeline import run_pipeline, extract_skills, extract_text_from_pdf, compute_semantic_score
+        from .pipeline import (
+            run_pipeline,
+            extract_skills,
+            extract_text_from_pdf,
+            compute_semantic_score,
+            extract_education_sentences,
+            extract_degree_level,
+            extract_experience_years,
+            experience_score,
+            education_score,
+            weighted_ats_score,
+        )
 
         _PIPELINE_FUNCS = {
             "run_pipeline": run_pipeline,
             "extract_skills": extract_skills,
             "extract_text_from_pdf": extract_text_from_pdf,
             "compute_semantic_score": compute_semantic_score,
+            "extract_education_sentences": extract_education_sentences,
+            "extract_degree_level": extract_degree_level,
+            "extract_experience_years": extract_experience_years,
+            "experience_score": experience_score,
+            "education_score": education_score,
+            "weighted_ats_score": weighted_ats_score,
         }
     return _PIPELINE_FUNCS
 
@@ -339,6 +356,8 @@ def _build_reasoning_summary(
     final_score,
     semantic_score,
     skill_match_pct,
+    experience_fit,
+    education_fit,
     matched,
     missing,
     extra,
@@ -361,10 +380,75 @@ def _build_reasoning_summary(
     extra_text = f" Extra strengths: {', '.join(extra[:4])}." if extra else ""
 
     return (
-        f"{fit.title()} fit profile with {semantic_score:.1f}% semantic relevance and "
-        f"{skill_match_pct:.1f}% required-skill coverage ({len(matched)} matched)."
+        f"{fit.title()} fit profile with {semantic_score:.1f}% semantic relevance, "
+        f"{skill_match_pct:.1f}% required-skill coverage, {experience_fit:.1f}% experience fit, "
+        f"and {education_fit:.1f}% education fit ({len(matched)} required skills matched)."
         f"{mapped_text}{missing_text}{extra_text}"
     )
+
+
+def _build_decision_factors(
+    *,
+    matched,
+    missing,
+    extra,
+    candidate_years,
+    required_years,
+    candidate_degree,
+    required_degree,
+    experience_fit,
+    education_fit,
+    semantic_score,
+    confidence,
+):
+    strengths = []
+    watchouts = []
+
+    if matched:
+        strengths.append(f"Matched {len(matched)} required skills: {', '.join(matched[:3])}")
+
+    if required_years and required_years > 0:
+        if candidate_years >= required_years:
+            strengths.append(
+                f"Meets experience target with {candidate_years:.1f} years vs {required_years:.1f} required"
+            )
+        else:
+            watchouts.append(
+                f"Experience is below target by {max(required_years - candidate_years, 0):.1f} years"
+            )
+    else:
+        strengths.append("No minimum experience threshold is defined for this role")
+
+    normalized_required_degree = (required_degree or "Unknown").strip() or "Unknown"
+    normalized_candidate_degree = (candidate_degree or "Unknown").strip() or "Unknown"
+    if normalized_required_degree != "Unknown":
+        if education_fit >= 99.9:
+            strengths.append(f"Education level meets the {normalized_required_degree} requirement")
+        else:
+            watchouts.append(
+                f"Education fit is {education_fit:.0f}% ({normalized_candidate_degree} vs {normalized_required_degree})"
+            )
+
+    if semantic_score >= 70:
+        strengths.append(f"Resume language aligns strongly with the job description ({semantic_score:.0f}% semantic match)")
+    elif semantic_score < 45:
+        watchouts.append(f"Semantic alignment is limited at {semantic_score:.0f}% and needs manual review")
+
+    if missing:
+        watchouts.append(f"Missing skill coverage in: {', '.join(missing[:4])}")
+
+    if extra:
+        strengths.append(f"Extra strengths include {', '.join(extra[:3])}")
+
+    if confidence < 55:
+        watchouts.append(f"Model confidence is {confidence:.0f}%, so interviewer validation is recommended")
+    elif confidence >= 80:
+        strengths.append(f"High ranking confidence ({confidence:.0f}%) across multiple scoring signals")
+
+    return {
+        "strengths": strengths[:4],
+        "watchouts": watchouts[:4],
+    }
 
 def build_skill_map(key_skills, learned_aliases=None):
     learned_aliases = learned_aliases or {}
@@ -489,14 +573,27 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
         except ValueError:
             similarities = np.zeros((len(cvs_data), 1), dtype=float)
 
+    pipeline_funcs = _get_pipeline_functions()
     results = []
     for i, cv_data in enumerate(cvs_data):
         cv_text = cv_data.get("cv_text") or ""
         normalized_cv = normalize_text(cv_text)
         skill_evidence = find_skill_evidence(cv_text, skill_map)
 
-        extracted_skills = cv_data.get("candidate_skills") or extract_skills(cv_text)
+        extracted_skills = cv_data.get("candidate_skills") or pipeline_funcs["extract_skills"](cv_text)
         candidate_skill_set = _to_skill_set(extracted_skills)
+
+        candidate_years = cv_data.get("candidate_years_exp")
+        exp_method = cv_data.get("exp_extraction_method") or ""
+        if candidate_years is None:
+            candidate_years, exp_method = pipeline_funcs["extract_experience_years"](cv_text)
+        candidate_years = round(float(candidate_years or 0.0), 2)
+
+        candidate_degree = (cv_data.get("candidate_degree") or "").strip() or "Unknown"
+        if candidate_degree == "Unknown":
+            education_text = pipeline_funcs["extract_education_sentences"](cv_text)
+            candidate_degree = pipeline_funcs["extract_degree_level"](education_text)
+
         matched_set, semantic_mapped = _map_candidate_to_required(
             required_skill_set,
             skill_map,
@@ -539,11 +636,23 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
 
         tfidf_score = float(similarities[i][0] * 100) if i < len(similarities) else 0.0
         try:
-            semantic_score = float(_get_pipeline_functions()["compute_semantic_score"](cv_text, job_description))
+            semantic_score = float(pipeline_funcs["compute_semantic_score"](cv_text, job_description))
         except Exception:
             semantic_score = tfidf_score
 
         skill_match_pct = (len(matched_set) / len(required_skill_set)) * 100 if required_skill_set else 0.0
+        experience_fit = float(pipeline_funcs["experience_score"](job.min_experience_years, candidate_years))
+        education_fit = float(pipeline_funcs["education_score"](job.required_degree, candidate_degree))
+        job_weighted_score = float(
+            pipeline_funcs["weighted_ats_score"](
+                skill_match_pct,
+                experience_fit,
+                education_fit,
+                semantic_score,
+                job,
+            )
+        )
+
         concept_coverage = round(
             100.0 * len([s for s in semantic_mapped if semantic_mapped.get(s)]) / len(required_skill_set),
             2,
@@ -561,12 +670,35 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
             + (w_skill * skill_match_pct)
         )
         semantic_bonus = 0.07 * concept_coverage
-        final_score = round(min(100.0, blended_score + semantic_bonus + (0.08 * learned_strength_pct)), 2)
+        insight_blend_score = round(min(100.0, blended_score + semantic_bonus + (0.08 * learned_strength_pct)), 2)
+        final_score = round(min(100.0, (0.72 * job_weighted_score) + (0.28 * insight_blend_score)), 2)
 
         confidence = round(
-            (0.60 * (100 - min(100.0, abs(semantic_score - tfidf_score))))
-            + (0.40 * skill_match_pct),
+            (0.45 * (100 - min(100.0, abs(semantic_score - tfidf_score))))
+            + (0.25 * skill_match_pct)
+            + (0.20 * experience_fit)
+            + (0.10 * education_fit),
             2,
+        )
+
+        score_contributions = {
+            "skills": round(job.weight_skills * skill_match_pct, 2),
+            "experience": round(job.weight_experience * experience_fit, 2),
+            "education": round(job.weight_education * education_fit, 2),
+            "semantic": round(job.weight_semantic * semantic_score, 2),
+        }
+        decision_factors = _build_decision_factors(
+            matched=matched,
+            missing=missing,
+            extra=extra,
+            candidate_years=candidate_years,
+            required_years=float(job.min_experience_years or 0),
+            candidate_degree=candidate_degree,
+            required_degree=job.required_degree or "Unknown",
+            experience_fit=experience_fit,
+            education_fit=education_fit,
+            semantic_score=semantic_score,
+            confidence=confidence,
         )
 
         results.append({
@@ -576,9 +708,18 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
             "file_name": cv_data.get("file_name") or "",
             "candidate_name": cv_data.get("candidate_name") or "Candidate",
             "final_score": final_score,
+            "job_weighted_score": round(job_weighted_score, 2),
+            "insight_blend_score": insight_blend_score,
             "similarity_score": round(tfidf_score, 2),
             "semantic_score": round(semantic_score, 2),
             "skill_match_pct": round(skill_match_pct, 2),
+            "experience_fit_pct": round(experience_fit, 2),
+            "education_fit_pct": round(education_fit, 2),
+            "candidate_years_exp": candidate_years,
+            "required_experience_years": round(float(job.min_experience_years or 0), 2),
+            "experience_extraction_method": exp_method or "resume-analysis",
+            "candidate_degree": candidate_degree,
+            "required_degree": job.required_degree or "Unknown",
             "matched_skills": matched,
             "missing_skills": missing,
             "extra_skills": extra,
@@ -588,11 +729,26 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
                 final_score=final_score,
                 semantic_score=semantic_score,
                 skill_match_pct=skill_match_pct,
+                experience_fit=experience_fit,
+                education_fit=education_fit,
                 matched=matched,
                 missing=missing,
                 extra=extra,
                 semantic_mapped=semantic_mapped,
             ),
+            "decision_factors": decision_factors,
+            "score_breakdown": {
+                "job_weighted_fit": round(job_weighted_score, 2),
+                "insight_blend_fit": insight_blend_score,
+                "semantic_alignment": round(semantic_score, 2),
+                "lexical_alignment": round(tfidf_score, 2),
+                "skill_coverage": round(skill_match_pct, 2),
+                "experience_fit": round(experience_fit, 2),
+                "education_fit": round(education_fit, 2),
+                "concept_coverage": concept_coverage,
+                "historical_strength": round(learned_strength_pct, 2),
+            },
+            "score_contributions": score_contributions,
             "evidence": [*evidence_text[:4], *context_snippets],
             "concept_coverage_pct": concept_coverage,
             "confidence_score": confidence,
@@ -601,6 +757,12 @@ def _score_cvs(job, cvs_data, key_skills=None, job_description=None):
                 "semantic": round(w_semantic, 4),
                 "tfidf": round(w_tfidf, 4),
                 "skills": round(w_skill, 4),
+            },
+            "job_weights": {
+                "skills": round(job.weight_skills, 4),
+                "experience": round(job.weight_experience, 4),
+                "education": round(job.weight_education, 4),
+                "semantic": round(job.weight_semantic, 4),
             },
         })
 
@@ -643,6 +805,9 @@ def rank_cvs_for_job(job_id, review_stage="", include_hired=False):
             'candidate_email': sub.candidate_email or '',
             'file_name': resume_name,
             'candidate_skills': sub.candidate_skills or [],
+            'candidate_years_exp': sub.candidate_years_exp,
+            'candidate_degree': sub.candidate_degree or 'Unknown',
+            'exp_extraction_method': sub.exp_extraction_method or '',
         })
 
     include_media_entries = not review_stage or review_stage == Submission.ReviewStage.APPLIED

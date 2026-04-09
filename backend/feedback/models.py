@@ -17,6 +17,9 @@ class Employee(models.Model):
     COMPANY_SIZE_CHOICES = [(1, 'Small'), (2, 'Medium'), (3, 'Large')]
     MARITAL_CHOICES      = [('Single', 'Single'), ('Married', 'Married'),
                              ('Divorced', 'Divorced')]
+    class CurrencyPreference(models.TextChoices):
+        EGP = 'EGP', 'Egyptian Pound'
+        USD = 'USD', 'US Dollar'
 
     # Identity
     employeeID         = models.CharField(max_length=50, primary_key=True, default=gen_id)
@@ -39,6 +42,11 @@ class Employee(models.Model):
                                           null=True, blank=True)
     yearsAtCompany     = models.IntegerField(null=True, blank=True)
     monthlyIncome      = models.IntegerField(null=True, blank=True)
+    currency_preference = models.CharField(
+        max_length=3,
+        choices=CurrencyPreference.choices,
+        default=CurrencyPreference.EGP,
+    )
     performanceRating  = models.IntegerField(null=True, blank=True)
     numberOfPromotions = models.IntegerField(null=True, blank=True)
     overtime           = models.BooleanField(null=True, blank=True)
@@ -184,6 +192,10 @@ class PayrollRecord(models.Model):
                       Employee, on_delete=models.CASCADE,
                       db_column='employeeID', related_name='payroll_records')
     payPeriod   = models.CharField(max_length=20)
+    currency    = models.CharField(
+                      max_length=3,
+                      choices=Employee.CurrencyPreference.choices,
+                      default=Employee.CurrencyPreference.EGP)
     baseSalary  = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     allowances  = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     deductions  = models.DecimalField(max_digits=10, decimal_places=2, default=0)

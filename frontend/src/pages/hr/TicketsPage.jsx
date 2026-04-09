@@ -40,6 +40,15 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getTicketTone = (item) => {
+  if (item?.followUpState === 'Escalate Now' || item?.priority === 'Critical') return 'red';
+  if (item?.followUpState === 'Stalled Resolution') return 'orange';
+  if (item?.followUpState === 'Needs Assignment') return 'yellow';
+  if (item?.followUpState === 'Pending Closure' || item?.status === 'Resolved') return 'accent';
+  if (item?.status === 'Closed') return 'green';
+  return 'accent';
+};
+
 export function HRTicketsPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -88,6 +97,67 @@ export function HRTicketsPage() {
     critical: watchSummary.criticalCount ?? tickets.filter((item) => item.priority === 'Critical').length,
     followUp: watchSummary.followUpCount ?? 0,
   }), [tickets, watchSummary]);
+
+  const escalateNowCount = followUpItems.filter((item) => item.followUpState === 'Escalate Now').length;
+  const stalledResolutionCount = followUpItems.filter((item) => item.followUpState === 'Stalled Resolution').length;
+  const pendingClosureCount = followUpItems.filter((item) => item.followUpState === 'Pending Closure').length;
+  const averageAging = followUpItems.length
+    ? followUpItems.reduce((sum, item) => sum + Number(item.ageDays || 0), 0) / followUpItems.length
+    : 0;
+  const escalationQueue = useMemo(() => {
+    const stateRank = { 'Escalate Now': 4, 'Stalled Resolution': 3, 'Needs Assignment': 2, 'Pending Closure': 1 };
+    const priorityRank = { Critical: 3, High: 2, Medium: 1, Low: 0 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0)
+        || Number(b.ageDays || 0) - Number(a.ageDays || 0))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const supportPressureMap = useMemo(() => {
+    return [...categoryBreakdown]
+      .sort((a, b) => (Number(b.criticalCount || 0) + Number(b.openCount || 0)) - (Number(a.criticalCount || 0) + Number(a.openCount || 0))
+        || Number(b.inProgressCount || 0) - Number(a.inProgressCount || 0)
+        || Number(b.count || 0) - Number(a.count || 0))
+      .slice(0, 4);
+  }, [categoryBreakdown]);
+  const supportPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (escalateNowCount > 0) {
+      plays.push({
+        title: t('Escalate critical blockers first'),
+        note: t('Start with tickets marked for immediate escalation so employee-impacting issues get ownership quickly.'),
+      });
+    }
+    if (stalledResolutionCount > 0) {
+      plays.push({
+        title: t('Restart stalled cases'),
+        note: t('Focus on in-progress tickets with no recent movement to keep service momentum from slipping.'),
+      });
+    }
+    if (pendingClosureCount > 0) {
+      plays.push({
+        title: t('Close resolved work cleanly'),
+        note: t('Pending-closure tickets are quick wins that reduce visible backlog and tidy the helpdesk queue.'),
+      });
+    }
+    if (supportPressureMap.some((item) => Number(item.criticalCount || 0) > 0 || Number(item.openCount || 0) > 0)) {
+      plays.push({
+        title: t('Prioritize the busiest support lane'),
+        note: t('Work the category carrying the highest open or critical pressure to reduce queue risk fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep support flow steady'),
+      note: t('The helpdesk queue looks stable, so keep current assignment and closure practices in place.'),
+    }];
+  }, [escalateNowCount, pendingClosureCount, stalledResolutionCount, supportPressureMap, t]);
+  const strongestSignal = escalateNowCount > 0
+    ? t('Some helpdesk cases need immediate escalation and should be triaged before service confidence drops.')
+    : stalledResolutionCount > 0
+      ? t('Several cases are stuck in progress, so the fastest operational win is restarting stalled resolutions.')
+      : t('Support operations look stable; keep new cases assigned quickly so they do not age into escalations.');
 
   const ticketPulseCards = useMemo(() => ([
     {
@@ -231,6 +301,96 @@ export function HRTicketsPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Support Triage Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring escalation risk, stalled cases, and service-lane pressure into one helpdesk decision layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={escalateNowCount > 0 ? 'red' : 'green'} label={`${t('Escalate now')} ${escalateNowCount}`} />
+            <Badge color={stalledResolutionCount > 0 ? 'orange' : 'gray'} label={`${t('Stalled')} ${stalledResolutionCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Escalate Now'),
+              value: escalateNowCount,
+              note: t('Critical or aging cases that need immediate ownership and escalation.'),
+              accent: escalateNowCount > 0 ? '#DC2626' : '#22C55E',
+            },
+            {
+              label: t('Stalled Resolution'),
+              value: stalledResolutionCount,
+              note: t('Tickets that are active but have not moved recently enough.'),
+              accent: stalledResolutionCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Pending Closure'),
+              value: pendingClosureCount,
+              note: t('Resolved cases that still need final closure and communication back to employees.'),
+              accent: '#2563EB',
+            },
+            {
+              label: t('Average Aging'),
+              value: `${Number(averageAging || 0).toFixed(1)} ${t('days')}`,
+              note: t('Average age across flagged follow-up tickets to help judge helpdesk speed.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Escalation Queue')}</div>
+            {escalationQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority support items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {escalationQueue.map((item) => (
+                  <div key={item.ticketID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getTicketTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.subject} • {t(item.category)} • {t(item.priority)}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color={item.priority === 'Critical' ? 'red' : item.priority === 'High' ? 'orange' : 'gray'} label={t(item.priority)} />
+                      <Badge color="gray" label={`${item.ageDays ?? 0} ${t('days since last update')}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Helpdesk Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {supportPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Tickets', value: stats.total, accent: '#111827' },
@@ -284,19 +444,26 @@ export function HRTicketsPage() {
         </div>
 
         <div className="hr-surface-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Category Snapshot')}</div>
-          {categoryBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Category Pressure Map')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which support categories are carrying the most open or critical pressure right now.')}</div>
+          {supportPressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No ticket summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {categoryBreakdown.map((item) => (
+              {supportPressureMap.map((item) => (
                 <div key={item.category} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{t(item.category)}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.count ?? 0}</span>
+                    <Badge
+                      color={Number(item.criticalCount || 0) > 0 ? 'red' : Number(item.openCount || 0) > 0 ? 'orange' : 'green'}
+                      label={`${item.count ?? 0} ${t('cases')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                     {item.openCount ?? 0} {t('open')} · {item.inProgressCount ?? 0} {t('in progress')} · {item.criticalCount ?? 0} {t('critical')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {item.resolvedCount ?? 0} {t('resolved')} · {t('focus where service pressure is highest')}
                   </div>
                 </div>
               ))}

@@ -32,6 +32,13 @@ const FIELD_TYPES = ['score_1_4', 'boolean', 'decimal'];
 const FIELD_LABELS = { score_1_4: 'Score 1-4', boolean: 'Yes / No', decimal: 'Decimal' };
 const EMPTY_RESPONSE_SNAPSHOT = { summary: {}, followUpItems: [] };
 
+const getResponseTone = (item) => {
+  if (item?.riskLevel === 'High') return 'red';
+  if (item?.riskLevel === 'Medium') return 'orange';
+  if (item?.status === 'Inactive') return 'gray';
+  return 'green';
+};
+
 export function HRFormsPage() {
   const toast = useToast();
   const { t } = useLanguage();
@@ -141,6 +148,71 @@ export function HRFormsPage() {
       accent: '#2563EB',
     },
   ]), [activeCount, draftCount, responseSummary.averageCompletionRate, responseSummary.lowCoverageForms, responseSummary.pendingResponses, t]);
+
+  const responseFollowUps = responseSnapshot?.followUpItems || [];
+  const highRiskCount = responseFollowUps.filter((item) => item.riskLevel === 'High').length;
+  const mediumRiskCount = responseFollowUps.filter((item) => item.riskLevel === 'Medium').length;
+  const zeroResponseCount = responseSummary.zeroResponseForms ?? responseFollowUps.filter((item) => Number(item.submissionCount || 0) === 0).length;
+  const inactiveRiskCount = responseFollowUps.filter((item) => item.status !== 'Live').length;
+
+  const responseGovernanceQueue = useMemo(() => {
+    const riskRank = { High: 3, Medium: 2, 'On Track': 1 };
+    return [...responseFollowUps]
+      .sort((a, b) => (riskRank[b.riskLevel] || 0) - (riskRank[a.riskLevel] || 0)
+        || Number(b.pendingResponses || 0) - Number(a.pendingResponses || 0)
+        || Number(a.completionRate || 0) - Number(b.completionRate || 0))
+      .slice(0, 4);
+  }, [responseFollowUps]);
+
+  const responsePressureMap = useMemo(() => {
+    return [...responseFollowUps]
+      .sort((a, b) => Number(b.pendingResponses || 0) - Number(a.pendingResponses || 0)
+        || Number(a.completionRate || 0) - Number(b.completionRate || 0)
+        || Number(b.questionCount || 0) - Number(a.questionCount || 0))
+      .slice(0, 4);
+  }, [responseFollowUps]);
+
+  const responsePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (highRiskCount > 0) {
+      plays.push({
+        title: t('Escalate high-risk surveys first'),
+        note: t('Live forms with weak completion should get manager outreach and reminder ownership today.'),
+      });
+    }
+    if (zeroResponseCount > 0) {
+      plays.push({
+        title: t('Restart silent surveys'),
+        note: t('Zero-response forms need a relaunch message or a clearer audience owner before the window slips further.'),
+      });
+    }
+    if (mediumRiskCount > 0) {
+      plays.push({
+        title: t('Convert medium-risk follow-up quickly'),
+        note: t('A short reminder burst now can lift completion before these forms become high-risk.'),
+      });
+    }
+    if (inactiveRiskCount > 0) {
+      plays.push({
+        title: t('Decide what stays live'),
+        note: t('Inactive forms with follow-up pressure should either be reactivated, closed cleanly, or removed from the cycle.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep response cadence steady'),
+      note: t('Form participation looks healthy right now, so maintain the current reminder and publishing rhythm.'),
+    }];
+  }, [highRiskCount, inactiveRiskCount, mediumRiskCount, t, zeroResponseCount]);
+
+  const strongestSignal = highRiskCount > 0
+    ? t('Some live surveys are falling behind response expectations, so reminder outreach and manager escalation should happen first.')
+    : zeroResponseCount > 0
+      ? t('A few forms still have no participation, so relaunching the survey and clarifying ownership is the next best move.')
+      : mediumRiskCount > 0
+        ? t('Response momentum is mostly healthy, but a few surveys still need nudges before their deadlines.')
+        : t('Survey governance looks stable, with live forms broadly keeping pace.');
 
   const handleExportForms = () => {
     const rows = [
@@ -419,16 +491,16 @@ export function HRFormsPage() {
             <Btn size="sm" variant="ghost" onClick={handleExportResponseHealth}>{t('Export Follow-up CSV')}</Btn>
           </div>
 
-          {(responseSnapshot?.followUpItems || []).length === 0 ? (
+          {responseFollowUps.length === 0 ? (
             <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('All tracked forms are currently on pace for response collection.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {(responseSnapshot?.followUpItems || []).map((item) => (
+              {responseFollowUps.map((item) => (
                 <div key={item.formID} className="workspace-action-card">
                   <div className="workspace-action-eyebrow">{t('Response watch')}</div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
-                    <Badge label={t(item.riskLevel)} color={item.riskLevel === 'High' ? 'red' : 'orange'} />
+                    <Badge label={t(item.riskLevel)} color={getResponseTone(item)} />
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.status)} • {t('Pending Responses')}: {item.pendingResponses} • {t('Completion Rate')}: {item.completionRate}%</div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{t(item.recommendedAction)}</div>
@@ -445,6 +517,112 @@ export function HRFormsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Low coverage forms')}</span><strong>{responseSummary.lowCoverageForms ?? 0}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Zero response forms')}</span><strong>{responseSummary.zeroResponseForms ?? 0}</strong></div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('Tracked submissions')}</span><strong>{totalSubmissions}</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 22 }}>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div className="hr-surface-card" style={{ padding: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Response Governance Radar')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+              {[
+                { label: t('High Risk'), value: highRiskCount, color: '#E8321A', note: t('Forms needing immediate manager follow-up.') },
+                { label: t('Medium Watch'), value: mediumRiskCount, color: '#F59E0B', note: t('Surveys that still need reminder nudges.') },
+                { label: t('Zero Response'), value: zeroResponseCount, color: '#7C3AED', note: t('Forms still waiting on their first submissions.') },
+                { label: t('Inactive Pressure'), value: inactiveRiskCount, color: '#2563EB', note: t('Follow-up items tied to inactive surveys.') },
+              ].map((item) => (
+                <div key={item.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 12px', background: '#fff' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{item.label}</div>
+                  <div style={{ fontSize: 23, fontWeight: 700, color: item.color }}>{item.value}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 14, borderRadius: 14, border: '1px solid #FDE68A', background: '#FFFBEB', padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', marginBottom: 6 }}>{t('Strongest signal')}</div>
+              <div style={{ fontSize: 13.5, color: '#92400E' }}>{strongestSignal}</div>
+            </div>
+          </div>
+
+          <div className="hr-table-card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid #F3F4F6' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t('Priority Response Queue')}</h3>
+            </div>
+            {responseGovernanceQueue.length === 0 ? (
+              <div className="hr-soft-empty" style={{ padding: '24px 18px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('No forms need immediate response intervention right now.')}</p>
+              </div>
+            ) : (
+              <div style={{ padding: '8px 0' }}>
+                {responseGovernanceQueue.map((item) => (
+                  <div key={`queue-${item.formID}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6' }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{item.title}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
+                        {item.pendingResponses} {t('pending')} · {item.completionRate}% {t('completion')} · {item.questionCount} {t('questions')}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--gray-400)', marginTop: 4 }}>{t(item.recommendedAction)}</div>
+                    </div>
+                    <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+                      <Badge label={t(item.riskLevel)} color={getResponseTone(item)} />
+                      <Btn size="sm" variant="ghost" onClick={() => navigate(`${resolvePath('/hr/submissions')}?form_id=${item.formID}`)}>{t('Open')}</Btn>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div className="hr-surface-card" style={{ padding: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Survey Playbook')}</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {responsePlaybook.map((item) => (
+                <div key={item.title} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.title}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Coverage Pressure Map')}</div>
+            {responsePressureMap.length === 0 ? (
+              <div className="hr-soft-empty" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('Survey coverage is balanced right now.')}</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {responsePressureMap.map((item) => (
+                  <div key={`pressure-${item.formID}`} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{item.title}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{t(item.status)} · {item.submissionCount} {t('submissions')}</div>
+                      </div>
+                      <Badge label={t(item.riskLevel)} color={getResponseTone(item)} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginTop: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Pending')}</div>
+                        <div style={{ fontWeight: 700, color: '#E8321A' }}>{item.pendingResponses}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Completion')}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.completionRate}%</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10.5, textTransform: 'uppercase', color: 'var(--gray-400)', fontWeight: 700 }}>{t('Questions')}</div>
+                        <div style={{ fontWeight: 700, color: '#2563EB' }}>{item.questionCount}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

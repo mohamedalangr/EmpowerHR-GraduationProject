@@ -73,11 +73,24 @@ export function HRCVRankingPage() {
     return 'low';
   };
 
+  const formatYears = (value = 0) => {
+    const numericValue = Number(value || 0);
+    if (!Number.isFinite(numericValue)) return '0';
+    return Number.isInteger(numericValue) ? `${numericValue}` : numericValue.toFixed(1);
+  };
+
   const getRecommendation = (rank = {}) => {
     const score = Number(rank.final_score || 0);
     const missingCount = (rank.missing_skills || []).length;
+    const experienceFit = Number(rank.experience_fit_pct || 0);
+    const educationFit = Number(rank.education_fit_pct || 0);
 
-    if (score >= 82 && missingCount <= 2) return { label: t('Fast-track interview'), color: 'green' };
+    if (score >= 82 && missingCount <= 2 && experienceFit >= 70 && educationFit >= 70) {
+      return { label: t('Fast-track interview'), color: 'green' };
+    }
+    if (score >= 70 && (experienceFit < 55 || educationFit < 55)) {
+      return { label: t('Check experience and degree fit'), color: 'yellow' };
+    }
     if (score >= 65) return { label: t('Review with hiring manager'), color: 'accent' };
     if (score >= 50) return { label: t('Consider for talent pool'), color: 'yellow' };
     return { label: t('Needs deeper review'), color: 'red' };
@@ -164,6 +177,91 @@ export function HRCVRankingPage() {
     },
   ];
 
+  const fastTrackCount = rankings.filter((rank) => {
+    const score = Number(rank.final_score || 0);
+    const missingCount = (rank.missing_skills || []).length;
+    const experienceFit = Number(rank.experience_fit_pct || 0);
+    return score >= 80 && missingCount <= 2 && experienceFit >= 65;
+  }).length;
+  const managerReviewCount = rankings.filter((rank) => {
+    const score = Number(rank.final_score || 0);
+    return score >= 65 && score < 80;
+  }).length;
+  const criticalGapCount = rankings.filter((rank) => {
+    const score = Number(rank.final_score || 0);
+    return score < 50 || (rank.missing_skills || []).length >= 3;
+  }).length;
+  const interviewReadyCount = submissions.filter((item) => ['Shortlisted', 'Interview'].includes(item.review_stage)).length;
+
+  const hiringDecisionQueue = rankings
+    .map((rank, index) => {
+      const recommendation = getRecommendation(rank);
+      const linkedSubmission = submissions.find((item) => item.id === rank.submission_id);
+      return {
+        ...rank,
+        queueKey: getRankKey(rank, index),
+        recommendation,
+        stageLabel: linkedSubmission?.review_stage || t('Applied'),
+      };
+    })
+    .sort((a, b) => Number(b.final_score || 0) - Number(a.final_score || 0)
+      || (a.missing_skills || []).length - (b.missing_skills || []).length)
+    .slice(0, 4);
+
+  const skillGapMap = Object.entries(
+    rankings.reduce((acc, rank) => {
+      (rank.missing_skills || []).forEach((skill) => {
+        const normalized = String(skill || '').trim();
+        if (!normalized) return;
+        acc[normalized] = (acc[normalized] || 0) + 1;
+      });
+      return acc;
+    }, {})
+  )
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 4)
+    .map(([skill, count]) => ({ skill, count }));
+
+  const decisionPlaybook = [];
+  if (fastTrackCount > 0) {
+    decisionPlaybook.push({
+      title: t('Fast-track the strongest profiles'),
+      note: t('Candidates with high fit and low skill gaps are ready for immediate interview or offer discussion.'),
+    });
+  }
+  if (managerReviewCount > 0) {
+    decisionPlaybook.push({
+      title: t('Use manager review on the middle band'),
+      note: t('Good-fit profiles need quick hiring-manager calibration before momentum slows.'),
+    });
+  }
+  if (criticalGapCount > 0) {
+    decisionPlaybook.push({
+      title: t('Separate development bets from immediate hires'),
+      note: t('Profiles with larger missing-skill gaps are better handled as talent-pool or future-fit options.'),
+    });
+  }
+  if (skillGapMap.length > 0) {
+    decisionPlaybook.push({
+      title: t('Watch the repeated skill gaps'),
+      note: t('Shared missing skills can point to a job-description mismatch or a tighter sourcing target.'),
+    });
+  }
+  if (decisionPlaybook.length === 0) {
+    decisionPlaybook.push({
+      title: t('Keep the shortlist moving'),
+      note: t('The current ranking set looks balanced, so keep interview and shortlist decisions flowing.'),
+    });
+  }
+
+  const strongestSignal = fastTrackCount > 0
+    ? t('There are strong-fit candidates ready for fast interview movement, so hiring momentum can accelerate now.')
+    : criticalGapCount > 0
+      ? t('Several profiles carry notable skill gaps, so the next decision should separate immediate hires from future-fit prospects.')
+      : managerReviewCount > 0
+        ? t('Most candidates sit in the review band, so quick hiring-manager calibration will unlock the next step.')
+        : t('The ranking view is balanced, with no major hiring blockers standing out right now.');
+
   const clearRankingFilters = () => {
     setSearchTerm('');
     setFitFilter('all');
@@ -196,15 +294,31 @@ export function HRCVRankingPage() {
       return;
     }
 
-    const csvHeader = ['Rank', 'Candidate', 'File', 'Overall Fit', 'Skill Coverage', 'Matched Skills', 'Missing Skills'];
+    const csvHeader = [
+      'Rank',
+      'Candidate',
+      'File',
+      'Overall Fit',
+      'Skill Coverage',
+      'Experience Fit',
+      'Education Fit',
+      'Recommendation',
+      'Matched Skills',
+      'Missing Skills',
+      'Summary',
+    ];
     const csvRows = rows.map(({ rank, index }) => [
       `#${index + 1}`,
       rank.candidate_name || '',
       rank.file_name || '',
       `${rank.final_score || 0}%`,
       `${rank.skill_match_pct || 0}%`,
+      `${rank.experience_fit_pct || 0}%`,
+      `${rank.education_fit_pct || 0}%`,
+      getRecommendation(rank).label,
       (rank.matched_skills || []).join(' | '),
       (rank.missing_skills || []).join(' | '),
+      rank.semantic_analysis || '',
     ]);
 
     const csvContent = [csvHeader, ...csvRows]
@@ -571,6 +685,115 @@ export function HRCVRankingPage() {
       </div>
 
       {rankings.length > 0 && (
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24 }}>
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="hr-surface-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Hiring Decision Radar')}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                {[
+                  { label: t('Fast-Track Fits'), value: fastTrackCount, color: '#16A34A', note: t('High-fit profiles ready for quick action.') },
+                  { label: t('Manager Review'), value: managerReviewCount, color: '#2563EB', note: t('Candidates that need hiring-manager calibration.') },
+                  { label: t('Critical Gaps'), value: criticalGapCount, color: '#E8321A', note: t('Profiles with bigger skill or fit gaps.') },
+                  { label: t('Interview Ready'), value: interviewReadyCount, color: '#7C3AED', note: t('Candidates already in shortlist or interview motion.') },
+                ].map((item) => (
+                  <div key={item.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 12px', background: '#fff' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{item.label}</div>
+                    <div style={{ fontSize: 23, fontWeight: 700, color: item.color }}>{item.value}</div>
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 14, borderRadius: 14, border: '1px solid #FDE68A', background: '#FFFBEB', padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', marginBottom: 6 }}>{t('Strongest signal')}</div>
+                <div style={{ fontSize: 13.5, color: '#92400E' }}>{strongestSignal}</div>
+              </div>
+            </div>
+
+            <div className="hr-table-card" style={{ overflow: 'hidden' }}>
+              <div style={{ padding: '18px 20px', borderBottom: '1px solid #F3F4F6' }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t('Priority Decision Queue')}</h3>
+              </div>
+              {hiringDecisionQueue.length === 0 ? (
+                <div className="hr-soft-empty" style={{ padding: '24px 18px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('Run a ranking pass to surface the next candidate decisions.')}</p>
+                </div>
+              ) : (
+                <div style={{ padding: '8px 0' }}>
+                  {hiringDecisionQueue.map((item, index) => (
+                    <div key={`decision-${item.queueKey}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>#{index + 1} · {item.candidate_name || item.file_name || t('Candidate')}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
+                          {Math.round(item.final_score || 0)}% {t('fit')} · {item.stageLabel} · {(item.missing_skills || []).length} {t('gaps')}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: 'var(--gray-400)', marginTop: 4 }}>{item.semantic_analysis || t('No semantic summary available')}</div>
+                      </div>
+                      <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+                        <Badge color={item.recommendation.color} label={item.recommendation.label} />
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRank(expandedRank === item.queueKey ? null : item.queueKey)}
+                          style={{
+                            border: '1px solid #D0D5DD',
+                            background: '#fff',
+                            color: 'var(--gray-700)',
+                            borderRadius: 8,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: '6px 10px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {expandedRank === item.queueKey ? t('Hide Brief') : t('Open Brief')}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="hr-surface-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Hiring Playbook')}</div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {decisionPlaybook.map((item) => (
+                  <div key={item.title} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                    <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.title}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="hr-surface-card" style={{ padding: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Skill Gap Pressure')}</div>
+              {skillGapMap.length === 0 ? (
+                <div className="hr-soft-empty" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('No repeated missing-skill pressure stands out right now.')}</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {skillGapMap.map((item) => (
+                    <div key={item.skill} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                        <div style={{ fontWeight: 700 }}>{item.skill}</div>
+                        <Badge color={item.count >= 3 ? 'red' : 'yellow'} label={`${item.count} ${t('profiles')}`} />
+                      </div>
+                      <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>
+                        {t('This skill appears repeatedly in the missing-skill list and may need targeted sourcing attention.')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rankings.length > 0 && (
         <div style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', overflow: 'hidden' }}>
           <div style={{ padding: '20px 24px', borderBottom: '1px solid #EAECF0' }}>
             <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'minmax(0, 2fr) minmax(280px, 1fr)' }}>
@@ -611,9 +834,29 @@ export function HRCVRankingPage() {
                       <Badge color="red" label={`${t('Missing')} ${(topCandidate.missing_skills || []).length}`} />
                       <Badge color="yellow" label={`${t('Coverage')} ${topCandidate.skill_match_pct ?? 0}%`} />
                       <Badge color="accent" label={`${t('Confidence')} ${Math.round(topCandidate.confidence_score || 0)}%`} />
+                      <Badge color="accent" label={`${t('Experience')} ${Math.round(topCandidate.experience_fit_pct || 0)}%`} />
+                      <Badge color="gray" label={`${t('Education')} ${Math.round(topCandidate.education_fit_pct || 0)}%`} />
                     </div>
                     <div style={{ marginTop: 8, fontSize: 12, color: 'var(--gray-600)', lineHeight: 1.45 }}>
                       {topCandidate.semantic_analysis || t('No semantic summary available')}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginTop: 10 }}>
+                      <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #D9E4FF', borderRadius: 10 }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '.06em' }}>{t('Experience Fit')}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginTop: 4 }}>{Math.round(topCandidate.experience_fit_pct || 0)}%</div>
+                        <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
+                          {topCandidate.required_experience_years > 0
+                            ? `${formatYears(topCandidate.candidate_years_exp)} ${t('yrs')} / ${formatYears(topCandidate.required_experience_years)} ${t('required')}`
+                            : t('No minimum years required')}
+                        </div>
+                      </div>
+                      <div style={{ padding: '8px 10px', background: '#fff', border: '1px solid #D9E4FF', borderRadius: 10 }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1D4ED8', textTransform: 'uppercase', letterSpacing: '.06em' }}>{t('Education Fit')}</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginTop: 4 }}>{Math.round(topCandidate.education_fit_pct || 0)}%</div>
+                        <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
+                          {(topCandidate.candidate_degree || t('Unknown'))} → {(topCandidate.required_degree || t('Open requirement'))}
+                        </div>
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -899,6 +1142,9 @@ export function HRCVRankingPage() {
                         <div style={{ fontSize: 12, color: 'var(--gray-700)', lineHeight: 1.4, marginBottom: 8 }}>
                           {rank.semantic_analysis || t('No semantic summary available')}
                         </div>
+                        <div style={{ fontSize: 11, color: 'var(--gray-500)', marginBottom: 8 }}>
+                          {t('Experience')} {Math.round(rank.experience_fit_pct || 0)}% · {t('Education')} {Math.round(rank.education_fit_pct || 0)}%
+                        </div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <Badge color="yellow" label={`${t('Concept Coverage')} ${Math.round(rank.concept_coverage_pct || 0)}%`} />
                         </div>
@@ -1027,16 +1273,25 @@ export function HRCVRankingPage() {
                               <div style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                                 {t('AI Explainability')}
                               </div>
+                              <div style={{ fontSize: 11.5, color: '#475467', lineHeight: 1.5, marginBottom: 10 }}>
+                                {t('Overall fit balances skills, experience, education, and semantic relevance for a clearer hiring decision.')}
+                              </div>
                               <div style={{ display: 'grid', gap: 8 }}>
                                 {renderScoreBar(t('Overall Fit'), rank.final_score, '#16A34A')}
+                                {renderScoreBar(t('Job Weighted Fit'), rank.job_weighted_score, '#175CD3')}
                                 {renderScoreBar(t('Semantic Alignment'), rank.semantic_score, '#2563EB')}
                                 {renderScoreBar(t('Skill Coverage'), rank.skill_match_pct, '#B54708')}
-                                {renderScoreBar(t('Concept Coverage'), rank.concept_coverage_pct, '#7C3AED')}
+                                {renderScoreBar(t('Experience Fit'), rank.experience_fit_pct, '#7C3AED')}
+                                {renderScoreBar(t('Education Fit'), rank.education_fit_pct, '#667085')}
+                                {renderScoreBar(t('Concept Coverage'), rank.concept_coverage_pct, '#9333EA')}
                                 {renderScoreBar(t('Confidence'), rank.confidence_score, '#E8321A')}
                               </div>
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                                 <Badge color={recommendation.color} label={recommendation.label} />
                                 <Badge color="accent" label={`${t('Historical Strength')} ${Math.round(rank.historical_strength_score || 0)}%`} />
+                                <Badge color="green" label={`${t('Skills')} +${Number(rank.score_contributions?.skills || 0).toFixed(1)}`} />
+                                <Badge color="accent" label={`${t('Experience')} +${Number(rank.score_contributions?.experience || 0).toFixed(1)}`} />
+                                <Badge color="gray" label={`${t('Education')} +${Number(rank.score_contributions?.education || 0).toFixed(1)}`} />
                               </div>
                             </div>
 
@@ -1044,6 +1299,18 @@ export function HRCVRankingPage() {
                               <div style={{ fontSize: 11, fontWeight: 700, color: '#B54708', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                                 {t('Evidence & Interview Focus')}
                               </div>
+                              {(rank.decision_factors?.strengths || []).length > 0 && (
+                                <>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#027A48', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                                    {t('Why this profile stands out')}
+                                  </div>
+                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                                    {(rank.decision_factors?.strengths || []).slice(0, 4).map((item, strengthIndex) => (
+                                      <Badge key={`${key}-strength-${strengthIndex}`} color="green" label={item} />
+                                    ))}
+                                  </div>
+                                </>
+                              )}
                               {(rank.evidence || []).length > 0 ? (
                                 <ul style={{ margin: '0 0 12px 18px', padding: 0, color: '#475467', fontSize: 12.5, lineHeight: 1.6 }}>
                                   {(rank.evidence || []).slice(0, 4).map((item, evidenceIndex) => (
@@ -1057,7 +1324,11 @@ export function HRCVRankingPage() {
                                 {t('Interview Focus')}
                               </div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {(rank.missing_skills || []).length > 0 ? (
+                                {(rank.decision_factors?.watchouts || []).length > 0 ? (
+                                  (rank.decision_factors?.watchouts || []).slice(0, 4).map((item, watchoutIndex) => (
+                                    <Badge key={`${key}-watchout-${watchoutIndex}`} color="red" label={item} />
+                                  ))
+                                ) : (rank.missing_skills || []).length > 0 ? (
                                   (rank.missing_skills || []).slice(0, 4).map((skill) => (
                                     <Badge key={`${key}-focus-${skill}`} color="red" label={skill} />
                                   ))
@@ -1066,7 +1337,15 @@ export function HRCVRankingPage() {
                                 )}
                               </div>
                               <div style={{ fontSize: 11.5, color: '#667085', marginTop: 10 }}>
-                                {t('Model weights')}: S {Math.round((rank.adaptive_weights?.semantic || 0) * 100)}% · T {Math.round((rank.adaptive_weights?.tfidf || 0) * 100)}% · K {Math.round((rank.adaptive_weights?.skills || 0) * 100)}%
+                                {t('Role weights')}: {t('Skills')} {Math.round((rank.job_weights?.skills || 0) * 100)}% · {t('Experience')} {Math.round((rank.job_weights?.experience || 0) * 100)}% · {t('Education')} {Math.round((rank.job_weights?.education || 0) * 100)}% · {t('Semantic')} {Math.round((rank.job_weights?.semantic || 0) * 100)}%
+                              </div>
+                              <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
+                                {t('Adaptive AI blend')}: {t('Semantic')} {Math.round((rank.adaptive_weights?.semantic || 0) * 100)}% · TF-IDF {Math.round((rank.adaptive_weights?.tfidf || 0) * 100)}% · {t('Skills')} {Math.round((rank.adaptive_weights?.skills || 0) * 100)}%
+                              </div>
+                              <div style={{ fontSize: 11.5, color: '#667085', marginTop: 4 }}>
+                                {t('Role fit context')}: {rank.required_experience_years > 0
+                                  ? `${formatYears(rank.candidate_years_exp)} ${t('yrs')} / ${formatYears(rank.required_experience_years)} ${t('required')}`
+                                  : t('No experience minimum')} · {(rank.candidate_degree || t('Unknown'))} → {(rank.required_degree || t('Open requirement'))}
                               </div>
                             </div>
                           </div>

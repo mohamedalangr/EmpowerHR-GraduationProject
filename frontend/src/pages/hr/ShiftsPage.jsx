@@ -52,6 +52,15 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getShiftTone = (item) => {
+  if (item?.followUpState === 'Coverage Risk' || item?.status === 'Swapped') return 'red';
+  if (item?.followUpState === 'Swap Review') return 'orange';
+  if (item?.followUpState === 'Needs Confirmation') return 'yellow';
+  if (item?.followUpState === 'Pending Closeout') return 'accent';
+  if (item?.status === 'Completed') return 'green';
+  return 'gray';
+};
+
 export function HRShiftsPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -95,6 +104,65 @@ export function HRShiftsPage() {
     coverageRisks: watchSummary.coverageRiskCount ?? 0,
     completed: watchSummary.completedCount ?? shifts.filter((shift) => shift.status === 'Completed').length,
   }), [shifts, watchSummary]);
+
+  const coverageRiskCount = watchSummary.coverageRiskCount ?? followUpItems.filter((item) => ['Coverage Risk', 'Swap Review'].includes(item.followUpState)).length;
+  const needsConfirmationCount = followUpItems.filter((item) => item.followUpState === 'Needs Confirmation').length;
+  const swapReviewCount = followUpItems.filter((item) => item.followUpState === 'Swap Review').length;
+  const pendingCloseoutCount = followUpItems.filter((item) => item.followUpState === 'Pending Closeout').length;
+  const todayCoverageCount = watchSummary.todayCount ?? shifts.filter((item) => item.shiftDate === new Date().toISOString().slice(0, 10)).length;
+  const shiftFocusQueue = useMemo(() => {
+    const stateRank = { 'Coverage Risk': 4, 'Swap Review': 3, 'Needs Confirmation': 2, 'Pending Closeout': 1 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(a.daysToShift ?? 999) - Number(b.daysToShift ?? 999)
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const shiftPressureMap = useMemo(() => {
+    return [...shiftTypeBreakdown]
+      .sort((a, b) => Number(b.followUpCount || 0) - Number(a.followUpCount || 0)
+        || Number(b.plannedCount || 0) - Number(a.plannedCount || 0)
+        || Number(b.swappedCount || 0) - Number(a.swappedCount || 0))
+      .slice(0, 4);
+  }, [shiftTypeBreakdown]);
+  const coveragePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (coverageRiskCount > 0) {
+      plays.push({
+        title: t('Stabilize risky coverage first'),
+        note: t('Start with unconfirmed or swapped shifts that are most likely to create same-day staffing gaps.'),
+      });
+    }
+    if (needsConfirmationCount > 0) {
+      plays.push({
+        title: t('Lock tomorrow’s confirmations'),
+        note: t('Shifts approaching the next day should be confirmed early so managers are not surprised by coverage holes.'),
+      });
+    }
+    if (pendingCloseoutCount > 0) {
+      plays.push({
+        title: t('Close out completed coverage cleanly'),
+        note: t('Yesterday’s confirmed shifts should be wrapped up quickly so attendance and payroll stay aligned.'),
+      });
+    }
+    if (shiftPressureMap.some((item) => Number(item.followUpCount || 0) > 0)) {
+      plays.push({
+        title: t('Watch the busiest shift type'),
+        note: t('Focus on the shift type carrying the most follow-up work to reduce workforce friction fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep coverage rhythm steady'),
+      note: t('Shift operations look stable, so keep the current confirmation and closeout cadence in place.'),
+    }];
+  }, [coverageRiskCount, needsConfirmationCount, pendingCloseoutCount, shiftPressureMap, t]);
+  const strongestSignal = coverageRiskCount > 0
+    ? t('Some shifts are at immediate coverage risk and should be stabilized before they turn into attendance or service gaps.')
+    : needsConfirmationCount > 0
+      ? t('Several upcoming shifts still need confirmation, so the next best win is locking tomorrow’s schedule.')
+      : t('Shift coverage looks stable; keep confirmations moving so planned work does not age into risk.');
 
   const shiftPulseCards = useMemo(() => ([
     {
@@ -263,6 +331,96 @@ export function HRShiftsPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Shift Coverage Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring same-day risks, upcoming confirmations, and shift-type pressure into one workforce coverage review layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={coverageRiskCount > 0 ? 'red' : 'green'} label={`${t('Coverage risk')} ${coverageRiskCount}`} />
+            <Badge color={needsConfirmationCount > 0 ? 'yellow' : 'gray'} label={`${t('Needs confirmation')} ${needsConfirmationCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Coverage Risk'),
+              value: coverageRiskCount,
+              note: t('Shifts most likely to create a staffing gap if they are not handled immediately.'),
+              accent: coverageRiskCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Needs Confirmation'),
+              value: needsConfirmationCount,
+              note: t('Upcoming shifts that should be locked before the next workday begins.'),
+              accent: needsConfirmationCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Swap Review'),
+              value: swapReviewCount,
+              note: t('Schedule changes that still need HR or manager attention before coverage is stable.'),
+              accent: swapReviewCount > 0 ? '#2563EB' : '#22C55E',
+            },
+            {
+              label: t('Today Coverage'),
+              value: todayCoverageCount,
+              note: t('Shifts scheduled for today so operations can quickly sense current workforce load.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Coverage Queue')}</div>
+            {shiftFocusQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority shift items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {shiftFocusQueue.map((item) => (
+                  <div key={item.scheduleID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getShiftTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.shiftDate} • {t(item.shiftType)} • {item.location || t('Location TBD')}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={t(item.shiftType)} />
+                      <Badge color="gray" label={(item.daysToShift ?? 0) >= 0 ? `${item.daysToShift ?? 0} ${t('days pending')}` : t('overdue')} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Coverage Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {coveragePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Total Shifts', value: stats.total, accent: '#111827' },
@@ -316,19 +474,26 @@ export function HRShiftsPage() {
         </div>
 
         <div className="hr-surface-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Shift Type Snapshot')}</div>
-          {shiftTypeBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Shift Type Pressure')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which shift patterns are carrying the most follow-up pressure across confirmations and swaps.')}</div>
+          {shiftPressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No shift summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {shiftTypeBreakdown.map((item) => (
+              {shiftPressureMap.map((item) => (
                 <div key={item.shiftType} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{t(item.shiftType)}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.count ?? 0}</span>
+                    <Badge
+                      color={Number(item.followUpCount || 0) > 0 ? 'orange' : 'green'}
+                      label={`${item.count ?? 0} ${t('shifts')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                     {item.plannedCount ?? 0} {t('planned')} · {item.confirmedCount ?? 0} {t('confirmed')} · {item.followUpCount ?? 0} {t('follow-up')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {item.swappedCount ?? 0} {t('swapped')} · {item.completedCount ?? 0} {t('completed')}
                   </div>
                 </div>
               ))}

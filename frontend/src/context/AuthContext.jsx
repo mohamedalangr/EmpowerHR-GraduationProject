@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { loginUser, logoutUser } from "../api/index";
+import { getMe, loginUser, logoutUser, updateMyPreferences } from "../api/index";
 
 const AuthContext = createContext(null);
 
@@ -209,20 +209,70 @@ const DEFAULT_NOTIFICATION_PREFERENCES = {
 
 const getNotificationPreferencesKey = (email) => `empowerhr-notification-preferences:${String(email || '').toLowerCase()}`;
 
+const normalizeUserData = (payload = {}, fallbackEmail = '') => ({
+  email: payload.email || fallbackEmail || '',
+  role: payload.role || 'TeamMember',
+  full_name: payload.full_name || payload.fullName || '',
+  employee_id: payload.employee_id || payload.employeeId || null,
+  currency_preference: payload.currency_preference || payload.currencyPreference || 'EGP',
+  employee_currency_preference: payload.employee_currency_preference || payload.employeeCurrencyPreference || payload.currency_preference || payload.currencyPreference || 'EGP',
+  language_preference: payload.language_preference || payload.languagePreference || 'en',
+  theme_preference: payload.theme_preference || payload.themePreference || 'comfort',
+  focus_mode_preference: Boolean(payload.focus_mode_preference ?? payload.focusModePreference ?? false),
+});
+
+const persistSessionUser = (userData) => {
+  if (!userData) return;
+  localStorage.setItem("user", JSON.stringify(userData));
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [notificationPreferences, setNotificationPreferences] = useState(DEFAULT_NOTIFICATION_PREFERENCES);
 
-  // Rehydrate session from localStorage on app load
+  // Rehydrate session from localStorage on app load and refresh the account profile from the backend.
   useEffect(() => {
-    const stored = localStorage.getItem("user");
-    const access = localStorage.getItem("access");
-    if (stored && access) {
-      setUser(JSON.parse(stored));
-    }
-    setLoading(false);
+    const restoreSession = async () => {
+      const stored = localStorage.getItem("user");
+      const access = localStorage.getItem("access");
+
+      if (!access) {
+        setLoading(false);
+        return;
+      }
+
+      if (stored) {
+        try {
+          setUser((current) => ({ ...normalizeUserData(JSON.parse(stored)), ...(current || {}) }));
+        } catch {
+          localStorage.removeItem("user");
+        }
+      }
+
+      try {
+        const profile = await getMe();
+        const nextUser = normalizeUserData(profile);
+        setUser(nextUser);
+        persistSessionUser(nextUser);
+      } catch {
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("user");
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restoreSession();
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.currencyPreference = user?.employee_currency_preference || 'EGP';
+    document.documentElement.dataset.themePreference = user?.theme_preference || 'comfort';
+  }, [user?.employee_currency_preference, user?.theme_preference]);
 
   useEffect(() => {
     if (!user?.email) {
@@ -259,16 +309,24 @@ export function AuthProvider({ children }) {
 
     if (data.detail) throw new Error(data.detail); // surface Django error messages
 
-    const { access, refresh, role, full_name, employee_id } = data;
-    const userData = { email, role, full_name, employee_id };
+    const { access, refresh } = data;
+    const userData = normalizeUserData({ ...data, email }, email);
 
-    localStorage.setItem("access",  access);
+    localStorage.setItem("access", access);
     localStorage.setItem("refresh", refresh);
-    localStorage.setItem("user",    JSON.stringify(userData));
+    persistSessionUser(userData);
 
     setUser(userData);
-    return ROLE_HOME[role] ?? "/login";
+    return ROLE_HOME[userData.role] ?? "/login";
   }, []);
+
+  const updateAccountPreferences = useCallback(async (preferences) => {
+    const data = await updateMyPreferences(preferences || {});
+    const nextUser = normalizeUserData(data, user?.email);
+    setUser(nextUser);
+    persistSessionUser(nextUser);
+    return nextUser;
+  }, [user?.email]);
 
   const rolePermissions = user?.role ? (ROLE_PERMISSIONS[user.role] || []) : [];
 
@@ -320,6 +378,7 @@ export function AuthProvider({ children }) {
       hasPermission,
       canAccessPath,
       resolvePath,
+      updateAccountPreferences,
       notificationPreferences,
       updateNotificationPreference,
     }}>

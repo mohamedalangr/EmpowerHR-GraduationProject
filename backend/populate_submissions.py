@@ -10,107 +10,107 @@ from django.core.files.base import ContentFile
 # Sample CV texts
 SAMPLE_CVS = [
     {
-        'name': 'John Smith',
-        'email': 'john.smith@email.com',
+        'name': 'أحمد حسن',
+        'email': 'ahmed.hassan@email.com',
         'cv_text': """
-        John Smith - Software Engineer
+        أحمد حسن - مهندس برمجيات
 
-        EXPERIENCE:
-        - 5 years as Python Developer at Tech Corp
-        - 3 years as Django Developer at Web Solutions
-        - 2 years as JavaScript Developer at Startup Inc
+        الخبرات:
+        - 5 سنوات كمطور Python في شركة حلول رقمية بالقاهرة
+        - 3 سنوات كمطور Django في شركة خدمات ويب مصرية
+        - سنتان كمطور JavaScript في شركة ناشئة محلية
 
-        SKILLS:
+        المهارات:
         - Python, Django, JavaScript, React, SQL
-        - Machine Learning, Data Analysis
-        - Git, Docker, AWS
+        - REST APIs, Git, Docker
+        - بناء لوحات تشغيل داخلية وأنظمة موارد بشرية
 
-        EDUCATION:
-        Bachelor of Computer Science
+        التعليم:
+        بكالوريوس حاسبات ومعلومات - جامعة القاهرة
         """,
         'job_id': 1
     },
     {
-        'name': 'Sarah Johnson',
-        'email': 'sarah.j@email.com',
+        'name': 'سارة عبد الله',
+        'email': 'sara.abdullah@email.com',
         'cv_text': """
-        Sarah Johnson - Data Scientist
+        سارة عبد الله - محللة بيانات موارد بشرية
 
-        EXPERIENCE:
-        - 4 years as Data Analyst at Data Corp
-        - 3 years as ML Engineer at AI Solutions
-        - 2 years as Python Developer at Tech Inc
+        الخبرات:
+        - 4 سنوات كمحللة بيانات في شركة خدمات أعمال
+        - 3 سنوات كمهندسة تعلم آلي في شركة تحليلات مصرية
+        - سنتان في إعداد تقارير Python وSQL لفرق الموارد البشرية
 
-        SKILLS:
-        - Python, Machine Learning, TensorFlow, SQL
-        - Statistics, Data Visualization, R
-        - Big Data, Hadoop, Spark
+        المهارات:
+        - Python, Machine Learning, SQL, Power BI
+        - Statistics, Data Visualization, Pandas
+        - تحليلات دوران الموظفين والتقارير التشغيلية
 
-        EDUCATION:
-        Master of Data Science
+        التعليم:
+        ماجستير علوم البيانات - جامعة عين شمس
         """,
         'job_id': 2
     },
     {
-        'name': 'Mike Davis',
-        'email': 'mike.davis@email.com',
+        'name': 'محمود فوزي',
+        'email': 'mahmoud.fawzy@email.com',
         'cv_text': """
-        Mike Davis - HR Professional
+        محمود فوزي - مدير موارد بشرية
 
-        EXPERIENCE:
-        - 6 years as HR Manager at Global Corp
-        - 4 years as Talent Acquisition Specialist
-        - 3 years as Employee Relations Manager
+        الخبرات:
+        - 6 سنوات كمدير موارد بشرية في شركة مصرية متوسطة
+        - 4 سنوات في التوظيف واكتساب المواهب
+        - 3 سنوات في علاقات الموظفين وإدارة الأداء
 
-        SKILLS:
+        المهارات:
         - HR Management, Recruitment, Communication
-        - Leadership, Conflict Resolution, Training
+        - Leadership, Training, Conflict Resolution
         - Performance Management, Employee Engagement
 
-        EDUCATION:
-        Master of Business Administration
+        التعليم:
+        ماجستير إدارة أعمال - الأكاديمية العربية
         """,
         'job_id': 3
     },
     {
-        'name': 'Emily Chen',
-        'email': 'emily.chen@email.com',
+        'name': 'آية سمير',
+        'email': 'aya.sameer@email.com',
         'cv_text': """
-        Emily Chen - Full Stack Developer
+        آية سمير - مطورة Full Stack
 
-        EXPERIENCE:
-        - 4 years as Backend Developer at Web Corp
-        - 3 years as Full Stack Engineer at Tech Solutions
-        - 2 years as Python Developer at Startup Inc
+        الخبرات:
+        - 4 سنوات كمطورة Backend في شركة حلول ويب بالقاهرة
+        - 3 سنوات كمهندسة Full Stack في شركة تقنية مصرية
+        - سنتان في تطوير أنظمة داخلية لخدمة فرق التشغيل
 
-        SKILLS:
+        المهارات:
         - Python, Django, JavaScript, React, Node.js
-        - PostgreSQL, MongoDB, Redis
-        - AWS, Docker, Kubernetes
+        - PostgreSQL, Redis, Docker
+        - تصميم واجهات استخدام عملية وسريعة
 
-        EDUCATION:
-        Bachelor of Software Engineering
+        التعليم:
+        بكالوريوس هندسة برمجيات - جامعة المنصورة
         """,
         'job_id': 1
     },
     {
-        'name': 'Alex Rodriguez',
-        'email': 'alex.r@email.com',
+        'name': 'يوسف خالد',
+        'email': 'youssef.khaled@email.com',
         'cv_text': """
-        Alex Rodriguez - Data Analyst
+        يوسف خالد - محلل بيانات
 
-        EXPERIENCE:
-        - 3 years as Business Analyst at Finance Corp
-        - 2 years as Data Analyst at Retail Inc
-        - 2 years as SQL Developer at Tech Solutions
+        الخبرات:
+        - 3 سنوات كمحلل أعمال في شركة خدمات مالية مصرية
+        - سنتان كمحلل بيانات في قطاع التجزئة
+        - سنتان في تطوير تقارير SQL ولوحات متابعة للإدارة
 
-        SKILLS:
+        المهارات:
         - SQL, Python, Excel, Tableau
         - Data Analysis, Statistics, Reporting
-        - Machine Learning basics, R
+        - مؤشرات الأداء وتحليل الاتجاهات
 
-        EDUCATION:
-        Bachelor of Statistics
+        التعليم:
+        بكالوريوس إحصاء - جامعة الإسكندرية
         """,
         'job_id': 2
     }

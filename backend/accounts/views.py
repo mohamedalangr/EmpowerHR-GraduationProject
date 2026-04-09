@@ -47,11 +47,28 @@ class MeView(APIView):
     """
     GET /api/auth/me/
     Returns the current authenticated user's profile.
+    PATCH/PUT /api/auth/me/
+    Saves account-level preferences such as language, layout theme, focus mode, and optional display settings.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         return Response(UserMeSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = UserMeSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+
+        if 'currency_preference' in serializer.validated_data and request.user.role not in ['HRManager', 'Admin']:
+            return Response(
+                {"detail": "Only HR managers and admins can update the account currency preference."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer.save()
+        return Response(UserMeSerializer(request.user).data)
+
+    put = patch
 
 
 class ChangePasswordView(APIView):

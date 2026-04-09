@@ -104,7 +104,6 @@ export const api = {
 export const getForms        = async (employeeID) => toList(await api.get(`/feedback/forms/?employee_id=${employeeID}`));
 export const getFormDetail   = (formID, employeeID) => api.get(`/feedback/forms/${formID}/?employee_id=${employeeID}`);
 export const submitFeedback  = (formID, data) => api.post(`/feedback/forms/${formID}/submit/`, data);
-//cd export const changePassword = (data) => api.post('/auth/change-password/', data);
 
 // HR Manager -- Forms
 export const hrGetForms      = async ()          => toList(await api.get('/feedback/hr/forms/'));
@@ -454,6 +453,7 @@ export const loginUser           = (data) => api.post('/auth/login/', data);
 export const logoutUser          = (refresh) => api.post('/auth/logout/', { refresh });
 export const refreshToken        = (refresh) => api.post('/auth/token/refresh/', { refresh });
 export const getMe               = () => api.get('/auth/me/');
+export const updateMyPreferences = (data) => api.put('/auth/me/', data);
 export const registerCandidate   = (data) => api.post('/auth/candidate/register/', data);
 export const changePassword      = (data) => api.post('/auth/change-password/', data);
 export const requestPasswordResetOtp = (data) => api.post('/auth/password-reset/request/', data);

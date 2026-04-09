@@ -352,9 +352,13 @@ export function EmployeeProfileSummary({
 }) {
   if (!employee) return null;
 
+  const preferredCurrency = employee?.currency_preference || (typeof document !== 'undefined'
+    ? (document.documentElement.dataset.currencyPreference || 'EGP')
+    : 'EGP');
+
   const formatCurrency = (value) => new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: preferredCurrency,
     minimumFractionDigits: 2,
   }).format(Number(value || 0));
 
@@ -364,6 +368,7 @@ export function EmployeeProfileSummary({
     ['Team', employee.team],
     ['Location', employee.location],
     ['Salary', employee.monthlyIncome !== null && employee.monthlyIncome !== undefined && employee.monthlyIncome !== '' ? formatCurrency(employee.monthlyIncome) : ''],
+    ['Currency', employee.currency_preference],
     ['Email', employee.email],
   ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '');
 

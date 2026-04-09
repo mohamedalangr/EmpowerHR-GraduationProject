@@ -69,6 +69,14 @@ function RatingButtons({ question, value, onChange, disabled }) {
   return null;
 }
 
+const getFeedbackTone = (form, averageQuestions = 0) => {
+  const questionCount = form?.questions?.length || 0;
+  const hasDecimal = (form?.questions || []).some((question) => question.fieldType === 'decimal');
+  if (form?.submission?.status === 'Completed') return 'green';
+  if (hasDecimal || questionCount > Math.max(3, averageQuestions)) return 'orange';
+  return 'red';
+};
+
 export function EmployeeFeedbackPage() {
   const { user, resolvePath } = useAuth();
   const { t } = useLanguage();
@@ -151,6 +159,77 @@ export function EmployeeFeedbackPage() {
     [forms],
   );
   const nextPendingForm = sortedForms.find((form) => getStatus(form) === 'pending') || null;
+  const quickWinCount = forms.filter((form) => getStatus(form) === 'pending' && (form.questions?.length || 0) <= 3).length;
+  const deepFocusCount = forms.filter((form) => getStatus(form) === 'pending' && ((form.questions?.length || 0) > 3 || (form.questions || []).some((question) => question.fieldType === 'decimal'))).length;
+  const ratingOnlyCount = forms.filter((form) => getStatus(form) === 'pending' && (form.questions || []).every((question) => question.fieldType === 'score_1_4')).length;
+  const feedbackFocusQueue = useMemo(
+    () => sortedForms
+      .filter((form) => getStatus(form) === 'pending')
+      .sort((a, b) => {
+        const aHasDecimal = (a.questions || []).some((question) => question.fieldType === 'decimal') ? 1 : 0;
+        const bHasDecimal = (b.questions || []).some((question) => question.fieldType === 'decimal') ? 1 : 0;
+        if (aHasDecimal !== bHasDecimal) return bHasDecimal - aHasDecimal;
+        return (b.questions?.length || 0) - (a.questions?.length || 0) || (a.title || '').localeCompare(b.title || '');
+      })
+      .slice(0, 4),
+    [sortedForms],
+  );
+  const questionPressureMap = useMemo(() => {
+    const counts = {};
+    forms.forEach((form) => {
+      if (getStatus(form) !== 'pending') return;
+      (form.questions || []).forEach((question) => {
+        const key = question.fieldType || 'other';
+        counts[key] = (counts[key] || 0) + 1;
+      });
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 4)
+      .map(([type, count]) => ({
+        type,
+        count,
+        label: type === 'score_1_4' ? t('Rating Questions') : type === 'boolean' ? t('Yes/No Questions') : t('Numeric Inputs'),
+      }));
+  }, [forms, t]);
+  const feedbackPlaybook = useMemo(() => {
+    const plays = [];
+    if (pending > 0) {
+      plays.push({
+        title: t('Clear one form in the next sitting'),
+        note: t('Finishing even a short survey now keeps your response queue from piling up later.'),
+      });
+    }
+    if (deepFocusCount > 0) {
+      plays.push({
+        title: t('Save focus time for longer surveys'),
+        note: t('Forms with more questions or numeric inputs usually need a more thoughtful review window.'),
+      });
+    }
+    if (quickWinCount > 0) {
+      plays.push({
+        title: t('Use quick wins to build momentum'),
+        note: t('Shorter surveys are the fastest way to boost your completion score and clear pending items.'),
+      });
+    }
+    if (ratingOnlyCount > 0) {
+      plays.push({
+        title: t('Start with easy rating forms'),
+        note: t('Simple score-based surveys can usually be completed in just a few moments.'),
+      });
+    }
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('You are fully on track'),
+      note: t('All available feedback forms are complete, so you can revisit this space when a new survey opens.'),
+    }];
+  }, [deepFocusCount, pending, quickWinCount, ratingOnlyCount, t]);
+  const strongestSignal = pending === 0
+    ? t('You are fully caught up on feedback, with no response actions currently waiting.')
+    : completionRate < 50
+      ? t('Several forms are still open, so the best next move is completing one pending survey today to rebuild momentum.')
+      : deepFocusCount > 0
+        ? t('Most remaining work sits in longer surveys, so reserving focused time will clear the queue fastest.')
+        : t('Only a light response queue remains, and a quick form can likely finish the job.');
 
   return (
     <div className="hr-page-shell">
@@ -214,6 +293,104 @@ export function EmployeeFeedbackPage() {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', marginBottom: 24 }}>
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div className="hr-surface-card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Feedback Completion Radar')}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+              {[
+                { label: t('Quick Wins'), value: quickWinCount, color: '#16A34A', note: t('Shorter forms you can likely finish quickly.') },
+                { label: t('Deep Focus'), value: deepFocusCount, color: '#E8321A', note: t('Longer or numeric surveys that need more attention.') },
+                { label: t('Rating Only'), value: ratingOnlyCount, color: '#2563EB', note: t('Simple score-based forms waiting in the queue.') },
+                { label: t('Momentum'), value: `${completionRate}%`, color: '#7C3AED', note: t('Your current feedback completion pace.') },
+              ].map((item) => (
+                <div key={item.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 12px', background: '#fff' }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{item.label}</div>
+                  <div style={{ fontSize: 23, fontWeight: 700, color: item.color }}>{item.value}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 14, borderRadius: 14, border: '1px solid #FDE68A', background: '#FFFBEB', padding: '12px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', marginBottom: 6 }}>{t('Strongest signal')}</div>
+              <div style={{ fontSize: 13.5, color: '#92400E' }}>{strongestSignal}</div>
+            </div>
+          </div>
+
+          <div className="hr-table-card" style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '18px 20px', borderBottom: '1px solid #F3F4F6' }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>{t('Priority Response Queue')}</h3>
+            </div>
+            {feedbackFocusQueue.length === 0 ? (
+              <div className="hr-soft-empty" style={{ padding: '24px 18px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('No pending feedback forms are waiting right now.')}</p>
+              </div>
+            ) : (
+              <div style={{ padding: '8px 0' }}>
+                {feedbackFocusQueue.map((form) => (
+                  <div key={`queue-${form.formID}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 20px', borderTop: '1px solid #F3F4F6' }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{form.title}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>
+                        {form.questions?.length || 0} {t('questions')} · {(form.questions || []).some((question) => question.fieldType === 'decimal') ? t('Needs numeric input') : t('Ready for a quick response')}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--gray-400)', marginTop: 4 }}>
+                        {form.description || t('Open this form to continue your feedback progress.')}
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
+                      <Badge color={getFeedbackTone(form, averageQuestions)} label={(form.questions || []).some((question) => question.fieldType === 'decimal') ? t('Focus') : t('Quick Win')} />
+                      <Btn size="sm" variant="ghost" onClick={() => handleOpen(form)}>{t('Open')}</Btn>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div className="hr-surface-card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Participation Playbook')}</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {feedbackPlaybook.map((item) => (
+                <div key={item.title} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                  <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.title}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Question Mix')}</div>
+            {questionPressureMap.length === 0 ? (
+              <div className="hr-soft-empty" style={{ padding: '24px 16px', textAlign: 'center' }}>
+                <p style={{ fontSize: 13.5, color: 'var(--gray-500)', margin: 0 }}>{t('No active question mix is waiting right now.')}</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {questionPressureMap.map((item) => (
+                  <div key={item.type} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                      <div style={{ fontWeight: 700 }}>{item.label}</div>
+                      <Badge color={item.count >= 3 ? 'accent' : 'gray'} label={`${item.count} ${t('items')}`} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>
+                      {item.type === 'decimal'
+                        ? t('Numeric questions usually take a little more attention and context to answer well.')
+                        : item.type === 'boolean'
+                          ? t('Yes/no questions can usually be cleared quickly once you open the form.')
+                          : t('Rating questions are the easiest way to keep your completion momentum high.')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

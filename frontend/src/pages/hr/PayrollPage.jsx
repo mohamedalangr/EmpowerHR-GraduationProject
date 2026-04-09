@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 const INITIAL_FORM = {
   employeeID: '',
   payPeriod: new Date().toISOString().slice(0, 7),
+  currency: 'EGP',
   baseSalary: '',
   allowances: '0',
   deductions: '0',
@@ -27,13 +28,28 @@ const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-
   URL.revokeObjectURL(url);
 };
 
-const formatMoney = (value, language = 'en') => {
+const formatMoney = (value, language = 'en', currency = 'EGP') => {
   const number = Number(value || 0);
   return new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency: currency || 'EGP',
     minimumFractionDigits: 2,
   }).format(number);
+};
+
+const summarizeCurrencyTotals = (items = [], valueSelector = (item) => Number(item?.netPay || 0)) => {
+  const totals = items.reduce((acc, item) => {
+    const currency = item?.currency || 'EGP';
+    acc[currency] = (acc[currency] || 0) + Number(valueSelector(item) || 0);
+    return acc;
+  }, {});
+
+  return Object.entries(totals).map(([currency, amount]) => ({ currency, amount }));
+};
+
+const formatCurrencyTotals = (totals = [], language = 'en') => {
+  if (!totals.length) return formatMoney(0, language, 'EGP');
+  return totals.map((entry) => formatMoney(entry.amount, language, entry.currency)).join(' • ');
 };
 
 const WATCH_COLORS = {
@@ -48,6 +64,14 @@ const EMPTY_WATCH = {
   summary: {},
   departmentBreakdown: [],
   followUpItems: [],
+};
+
+const getPayrollTone = (item) => {
+  if (item?.followUpState === 'Overdue Release') return 'red';
+  if (item?.followUpState === 'Ready to Release' || item?.status === 'Draft') return 'orange';
+  if (item?.followUpState === 'Payment Date Missing') return 'yellow';
+  if (item?.status === 'Paid') return 'green';
+  return 'accent';
 };
 
 export function HRPayrollPage() {
@@ -91,9 +115,116 @@ export function HRPayrollPage() {
   const stats = useMemo(() => ({
     totalRecords: watchSummary.totalRecords ?? records.length,
     pendingCount: watchSummary.draftCount ?? records.filter((item) => item.status !== 'Paid').length,
-    paidAmount: Number(watchSummary.paidAmount ?? records.filter((item) => item.status === 'Paid').reduce((sum, item) => sum + Number(item.netPay || 0), 0)),
     followUpCount: watchSummary.followUpCount ?? 0,
   }), [records, watchSummary]);
+
+  const overdueCount = watchSummary.overdueCount ?? followUpItems.filter((item) => item.followUpState === 'Overdue Release').length;
+  const readyToReleaseCount = followUpItems.filter((item) => item.followUpState === 'Ready to Release').length;
+  const paymentDateMissingCount = followUpItems.filter((item) => item.followUpState === 'Payment Date Missing').length;
+  const paidTotals = useMemo(() => summarizeCurrencyTotals(records.filter((item) => item.status === 'Paid')), [records]);
+  const pendingTotals = useMemo(() => summarizeCurrencyTotals(records.filter((item) => item.status !== 'Paid')), [records]);
+  const averagePendingTotals = useMemo(() => {
+    const grouped = records.reduce((acc, item) => {
+      if (item.status === 'Paid') return acc;
+      const currency = item?.currency || 'EGP';
+      const entry = acc[currency] || { count: 0, amount: 0 };
+      entry.count += 1;
+      entry.amount += Number(item.netPay || 0);
+      acc[currency] = entry;
+      return acc;
+    }, {});
+
+    return Object.entries(grouped).map(([currency, entry]) => ({
+      currency,
+      amount: entry.count ? entry.amount / entry.count : 0,
+    }));
+  }, [records]);
+  const averagePendingValue = formatCurrencyTotals(averagePendingTotals, language);
+  const payrollReleaseQueue = useMemo(() => {
+    const stateRank = { 'Overdue Release': 3, 'Payment Date Missing': 2, 'Ready to Release': 1 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || Number(b.ageDays || 0) - Number(a.ageDays || 0)
+        || Number(b.netPay || 0) - Number(a.netPay || 0))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const payrollPressureMap = useMemo(() => {
+    const grouped = records.reduce((acc, item) => {
+      const department = item.department || 'Unassigned';
+      const currency = item.currency || 'EGP';
+      const entry = acc[department] || {
+        department,
+        count: 0,
+        draftCount: 0,
+        paidCount: 0,
+        currencyTotals: {},
+      };
+
+      entry.count += 1;
+      if (item.status === 'Paid') {
+        entry.paidCount += 1;
+      } else {
+        entry.draftCount += 1;
+      }
+
+      const bucket = entry.currencyTotals[currency] || { currency, pendingAmount: 0, totalAmount: 0 };
+      bucket.totalAmount += Number(item.netPay || 0);
+      if (item.status !== 'Paid') {
+        bucket.pendingAmount += Number(item.netPay || 0);
+      }
+      entry.currencyTotals[currency] = bucket;
+      acc[department] = entry;
+      return acc;
+    }, {});
+
+    return Object.values(grouped)
+      .sort((a, b) => Number(b.draftCount || 0) - Number(a.draftCount || 0)
+        || Number(b.count || 0) - Number(a.count || 0)
+        || String(a.department || '').localeCompare(String(b.department || '')))
+      .slice(0, 4)
+      .map((entry) => ({
+        ...entry,
+        currencyTotals: Object.values(entry.currencyTotals || {}),
+      }));
+  }, [records]);
+  const payrollPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (overdueCount > 0) {
+      plays.push({
+        title: t('Release overdue payroll first'),
+        note: t('Start with overdue payroll runs so employee pay confidence does not slip before the next pay cycle.'),
+      });
+    }
+    if (readyToReleaseCount > 0) {
+      plays.push({
+        title: t('Clear ready-to-release drafts'),
+        note: t('Draft runs that are already prepared should move out of the queue quickly to reduce last-minute payroll pressure.'),
+      });
+    }
+    if (paymentDateMissingCount > 0) {
+      plays.push({
+        title: t('Confirm missing payment dates'),
+        note: t('Paid records without a confirmed payment date should be reconciled so payroll reporting stays audit-ready.'),
+      });
+    }
+    if (payrollPressureMap.some((item) => Number(item.draftCount || 0) > 0)) {
+      plays.push({
+        title: t('Prioritize the busiest department'),
+        note: t('Focus on the department carrying the most draft payroll pressure to reduce queue risk fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep payroll rhythm steady'),
+      note: t('Payroll operations look stable, so keep the current review and release cadence in place.'),
+    }];
+  }, [overdueCount, paymentDateMissingCount, payrollPressureMap, readyToReleaseCount, t]);
+  const strongestSignal = overdueCount > 0
+    ? t('Some payroll runs are overdue and should be released before payroll confidence slips further.')
+    : paymentDateMissingCount > 0
+      ? t('Some paid records still need payment confirmation, so finance follow-through is the next control point to tighten.')
+      : t('Payroll flow looks steady; keep draft runs moving so they do not age into overdue releases.');
 
   const payrollPulseCards = useMemo(() => ([
     {
@@ -130,6 +261,7 @@ export function HRPayrollPage() {
     setSelectedEmployee(employee || null);
     setForm((prev) => ({
       ...prev,
+      currency: employee?.currency_preference || prev.currency || 'EGP',
       baseSalary: employee?.monthlyIncome !== null && employee?.monthlyIncome !== undefined
         ? String(employee.monthlyIncome)
         : (employee ? prev.baseSalary : ''),
@@ -193,6 +325,7 @@ export function HRPayrollPage() {
         ...form,
         employeeID: form.employeeID.trim(),
         payPeriod: form.payPeriod.trim(),
+        currency: form.currency || selectedEmployee?.currency_preference || 'EGP',
       });
       toast('Payroll record created');
       setForm({ ...INITIAL_FORM, payPeriod: new Date().toISOString().slice(0, 7) });
@@ -255,7 +388,7 @@ export function HRPayrollPage() {
           {[
             { label: t('Payroll Records'), value: stats.totalRecords, color: '#111827' },
             { label: t('Pending Release'), value: stats.pendingCount, color: '#E8321A' },
-            { label: t('Paid Amount'), value: formatMoney(stats.paidAmount, language), color: '#10B981' },
+            { label: t('Paid Amount'), value: formatCurrencyTotals(paidTotals, language), color: '#10B981' },
             { label: t('Needs Follow-Up'), value: stats.followUpCount, color: '#F59E0B' },
           ].map((card) => (
             <div key={card.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
@@ -274,6 +407,96 @@ export function HRPayrollPage() {
             <div className="workspace-journey-note">{card.note}</div>
           </div>
         ))}
+      </div>
+
+      <div className="hr-surface-card" style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Payroll Release Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring overdue releases, payment controls, and department pressure into one finance-ready payroll review layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={overdueCount > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${overdueCount}`} />
+            <Badge color={readyToReleaseCount > 0 ? 'orange' : 'gray'} label={`${t('Ready to release')} ${readyToReleaseCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Overdue Release'),
+              value: overdueCount,
+              note: t('Payroll runs already outside the expected release window and most likely to create employee concern.'),
+              accent: overdueCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Ready to Release'),
+              value: readyToReleaseCount,
+              note: t('Draft payroll runs that can be pushed forward quickly to reduce last-minute risk.'),
+              accent: readyToReleaseCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Payment Date Missing'),
+              value: paymentDateMissingCount,
+              note: t('Paid records that still need payment-date confirmation for reporting and control hygiene.'),
+              accent: paymentDateMissingCount > 0 ? '#2563EB' : '#22C55E',
+            },
+            {
+              label: t('Average Pending Value'),
+              value: averagePendingValue,
+              note: t('Average value of unreleased payroll records currently sitting in the queue.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ background: '#FCFCFD', borderRadius: 20, padding: 16, border: '1px solid #EAECF0' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Release Queue')}</div>
+            {payrollReleaseQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority payroll items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {payrollReleaseQueue.map((item) => (
+                  <div key={item.payrollID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getPayrollTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.payPeriod} • {item.department}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={formatMoney(item.netPay, language, item.currency)} />
+                      <Badge color="gray" label={`${item.ageDays ?? 0} ${t('days pending')}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ background: '#FCFCFD', borderRadius: 20, padding: 16, border: '1px solid #EAECF0' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Payroll Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {payrollPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
@@ -315,7 +538,7 @@ export function HRPayrollPage() {
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 10 }}>{item.summary}</div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
-                    {formatMoney(item.netPay, language)} · {item.ageDays ?? 0} {t('days pending')}
+                    {formatMoney(item.netPay, language, item.currency)} · {item.ageDays ?? 0} {t('days pending')}
                   </div>
                 </div>
               ))}
@@ -324,19 +547,26 @@ export function HRPayrollPage() {
         </div>
 
         <div className="hr-surface-card" style={{ background: 'var(--white)', borderRadius: 24, border: '1px solid #EAECF0', padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Department Snapshot')}</div>
-          {departmentBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Department Pressure Map')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which teams are carrying the highest draft payroll pressure or unreleased value.')}</div>
+          {payrollPressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No payroll summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {departmentBreakdown.map((item) => (
+              {payrollPressureMap.map((item) => (
                 <div key={item.department} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{item.department}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.count ?? 0}</span>
+                    <Badge
+                      color={Number(item.draftCount || 0) > 0 ? 'orange' : 'green'}
+                      label={`${item.count ?? 0} ${t('records')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
-                    {item.draftCount ?? 0} {t('draft')} · {item.paidCount ?? 0} {t('paid')} · {formatMoney(item.pendingAmount ?? 0, language)} {t('pending')}
+                    {item.draftCount ?? 0} {t('draft')} · {item.paidCount ?? 0} {t('paid')} · {formatCurrencyTotals((item.currencyTotals || []).map((entry) => ({ currency: entry.currency, amount: entry.pendingAmount })), language)} {t('pending')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {formatCurrencyTotals((item.currencyTotals || []).map((entry) => ({ currency: entry.currency, amount: entry.totalAmount })), language)} {t('total payroll value tracked for this team')}
                   </div>
                 </div>
               ))}
@@ -363,6 +593,29 @@ export function HRPayrollPage() {
             note="Payroll-related defaults were fetched from the employee profile. You can still edit every value before saving."
           />
           <Input label={t('Pay Period (YYYY-MM)')} value={form.payPeriod} onChange={(e) => handleChange('payPeriod', e.target.value)} placeholder="2026-04" />
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 8 }}>{t('layout.currency')}</label>
+            <select
+              value={form.currency}
+              onChange={(e) => handleChange('currency', e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                background: '#fff',
+                border: '1.5px solid #E7EAEE',
+                borderRadius: 14,
+                fontSize: 14,
+                fontWeight: 500,
+                color: 'var(--gray-900)',
+              }}
+            >
+              <option value="EGP">{t('currency.EGP')}</option>
+              <option value="USD">{t('currency.USD')}</option>
+            </select>
+            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--gray-500)' }}>
+              {t('Changing the payroll currency here also saves it to the employee profile.')}
+            </div>
+          </div>
           <Input label={t('Base Salary')} type="number" value={form.baseSalary} onChange={(e) => handleChange('baseSalary', e.target.value)} placeholder="15000" />
           <Input label={t('Allowances')} type="number" value={form.allowances} onChange={(e) => handleChange('allowances', e.target.value)} placeholder="0" />
           <Input label={t('Deductions')} type="number" value={form.deductions} onChange={(e) => handleChange('deductions', e.target.value)} placeholder="0" />
@@ -400,8 +653,11 @@ export function HRPayrollPage() {
                         <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{item.department || '—'}</div>
                       </td>
                       <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}>{item.payPeriod}</td>
-                      <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}>{formatMoney(item.baseSalary, language)}</td>
-                      <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6', fontWeight: 700 }}>{formatMoney(item.netPay, language)}</td>
+                      <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}>
+                        {formatMoney(item.baseSalary, language, item.currency)}
+                        <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 4 }}>{item.currency || 'EGP'}</div>
+                      </td>
+                      <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6', fontWeight: 700 }}>{formatMoney(item.netPay, language, item.currency)}</td>
                       <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}><Badge label={t(item.status)} color={statusColor(item.status)} /></td>
                       <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}>{item.paymentDate || '—'}</td>
                       <td style={{ padding: '12px 16px', borderTop: '1px solid #F3F4F6' }}>

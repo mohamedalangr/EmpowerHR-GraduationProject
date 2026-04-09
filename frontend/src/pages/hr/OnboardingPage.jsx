@@ -49,6 +49,14 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getTransitionTone = (item) => {
+  const state = item?.dueState || item?.status;
+  if (state === 'Blocked' || state === 'Overdue') return 'red';
+  if (state === 'Needs Kickoff' || state === 'Due Soon' || state === 'In Progress') return 'orange';
+  if (state === 'Completed' || state === 'On Track') return 'green';
+  return 'accent';
+};
+
 export function HROnboardingPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
@@ -89,6 +97,106 @@ export function HROnboardingPage() {
     followUp: watchSummary.followUpCount ?? 0,
     completed: plans.filter((plan) => plan.status === 'Completed').length,
   }), [plans, watchSummary]);
+
+  const overdueCount = watchSummary.overduePlans ?? followUpItems.filter((item) => item.dueState === 'Overdue').length;
+  const blockedCount = watchSummary.blockedPlans ?? plans.filter((plan) => plan.status === 'Blocked').length;
+  const kickoffCount = watchSummary.kickoffNeeded ?? followUpItems.filter((item) => item.dueState === 'Needs Kickoff').length;
+  const avgProgress = watchSummary.averageProgress ?? (plans.length
+    ? Math.round(plans.reduce((sum, plan) => sum + Number(plan.progress || 0), 0) / plans.length)
+    : 0);
+  const transitionPlans = useMemo(
+    () => planTypeBreakdown.find((item) => item.planType === 'Transition')?.totalCount
+      ?? plans.filter((plan) => plan.planType === 'Transition').length,
+    [planTypeBreakdown, plans],
+  );
+  const priorityQueue = useMemo(() => {
+    const stateRank = { Blocked: 4, Overdue: 3, 'Needs Kickoff': 2, 'Due Soon': 1, 'On Track': 0, Completed: 0 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.dueState || b.status] || 0) - (stateRank[a.dueState || a.status] || 0)
+        || Number(a.progress ?? 0) - Number(b.progress ?? 0)
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const departmentTransitionMap = useMemo(() => {
+    const map = new Map();
+
+    plans.forEach((plan) => {
+      const key = plan.department || 'Unassigned';
+      const current = map.get(key) || {
+        department: key,
+        total: 0,
+        onboarding: 0,
+        transitions: 0,
+        blocked: 0,
+        followUp: 0,
+      };
+
+      current.total += 1;
+      if (plan.planType === 'Onboarding') current.onboarding += 1;
+      if (plan.planType === 'Transition') current.transitions += 1;
+      if (plan.status === 'Blocked') current.blocked += 1;
+      map.set(key, current);
+    });
+
+    followUpItems.forEach((item) => {
+      const key = item.department || 'Unassigned';
+      const current = map.get(key) || {
+        department: key,
+        total: 0,
+        onboarding: 0,
+        transitions: 0,
+        blocked: 0,
+        followUp: 0,
+      };
+
+      current.followUp += 1;
+      map.set(key, current);
+    });
+
+    return [...map.values()]
+      .sort((a, b) => b.followUp - a.followUp || b.blocked - a.blocked || b.total - a.total)
+      .slice(0, 4);
+  }, [followUpItems, plans]);
+  const onboardingPlaybook = useMemo(() => {
+    const plays = [];
+
+    if (overdueCount > 0) {
+      plays.push({
+        title: t('Recover overdue transitions'),
+        note: t('Start with overdue onboarding or transition plans so first-week and handoff steps do not slip further.'),
+      });
+    }
+    if (blockedCount > 0) {
+      plays.push({
+        title: t('Unblock stalled plans'),
+        note: t('Review blockers with managers and owners so access, equipment, or handoff issues are cleared quickly.'),
+      });
+    }
+    if (kickoffCount > 0) {
+      plays.push({
+        title: t('Launch missing kickoffs'),
+        note: t('Any plan marked for kickoff should get a first-touch owner and date before the next HR stand-up.'),
+      });
+    }
+    if (transitionPlans > 0) {
+      plays.push({
+        title: t('Watch internal role changes'),
+        note: t('Transition plans deserve extra check-ins so team moves do not create coverage gaps.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain onboarding rhythm'),
+      note: t('Current onboarding and transition work looks stable, so keep the same weekly check-in cadence.'),
+    }];
+  }, [blockedCount, kickoffCount, overdueCount, t, transitionPlans]);
+  const strongestSignal = blockedCount > 0
+    ? t('Some transition plans are blocked and need a fast HR-manager unblock before the next milestone.')
+    : overdueCount > 0
+      ? t('A few plans are slipping past their target date and should be recovered first.')
+      : kickoffCount > 0
+        ? t('New plans are waiting for kickoff and should get an owner plus first checkpoint.')
+        : t('The transition pipeline looks healthy; focus next on keeping the first 30/60/90-day rhythm strong.');
 
   const buildSuggestedPlanTitle = (employee, planType = 'Onboarding') => {
     if (!employee) return '';
@@ -228,6 +336,96 @@ export function HROnboardingPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Onboarding Transition Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring the most urgent kickoff, onboarding, and handoff signals into one transition planning layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={overdueCount > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${overdueCount}`} />
+            <Badge color={blockedCount > 0 ? 'orange' : 'gray'} label={`${t('Blocked')} ${blockedCount}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Overdue Plans'),
+              value: overdueCount,
+              note: t('Plans that are past target date and need recovery action.'),
+              accent: overdueCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Needs Kickoff'),
+              value: kickoffCount,
+              note: t('Transitions waiting for an owner or first-day launch moment.'),
+              accent: kickoffCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Transition Plans'),
+              value: transitionPlans,
+              note: t('Internal moves that may need extra coordination and coverage checks.'),
+              accent: transitionPlans > 0 ? '#2563EB' : '#94A3B8',
+            },
+            {
+              label: t('Avg Progress'),
+              value: `${avgProgress}%`,
+              note: t('Overall completion momentum across current onboarding work.'),
+              accent: avgProgress >= 70 ? '#10B981' : avgProgress >= 40 ? '#F59E0B' : '#E8321A',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Transition Queue')}</div>
+            {priorityQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority onboarding or transition items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {priorityQueue.map((item) => (
+                  <div key={item.planID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getTransitionTone(item)} label={t(item.dueState || item.status || 'On Track')} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.planType || 'Onboarding')} • {item.progress ?? 0}% {t('complete')}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.title || t('Transition plan')}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={`${t('Target')}: ${item.targetDate || t('No target date set')}`} />
+                      <Badge color="gray" label={`${t('Department')}: ${item.department || '—'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('HR Transition Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {onboardingPlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.15fr .85fr', marginBottom: 24 }}>
         <div className="hr-surface-card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -288,6 +486,26 @@ export function HROnboardingPage() {
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                       {item.totalCount ?? 0} {t('plans')} · {item.completedCount ?? 0} {t('completed')} · {item.averageProgress ?? 0}% {t('avg progress')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', margin: '16px 0 10px' }}>{t('Department Transition Load')}</div>
+            {departmentTransitionMap.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Department transition signals will appear as plans are created.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {departmentTransitionMap.map((item) => (
+                  <div key={item.department} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E7EAEE', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gray-700)' }}>{item.department}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--gray-500)', marginTop: 2 }}>{item.total} {t('plans')} • {item.onboarding} {t('Onboarding')} • {item.transitions} {t('Transition')}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: 11.5, fontWeight: 700 }}>
+                      <div style={{ color: item.followUp > 0 ? '#F59E0B' : 'var(--gray-500)' }}>{item.followUp} {t('follow-up')}</div>
+                      <div style={{ color: item.blocked > 0 ? '#E8321A' : 'var(--gray-500)', marginTop: 2 }}>{item.blocked} {t('Blocked')}</div>
                     </div>
                   </div>
                 ))}

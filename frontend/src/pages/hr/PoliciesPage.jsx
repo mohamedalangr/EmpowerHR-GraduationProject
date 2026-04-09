@@ -66,6 +66,69 @@ export function HRPoliciesPage() {
     averageCoverage: `${compliance?.summary?.averageCoverageRate ?? 100}%`,
   }), [compliance, policies.length]);
 
+  const followUpItems = compliance?.followUpItems || [];
+  const audienceBreakdown = compliance?.audienceBreakdown || [];
+  const averageCoverageValue = Number(compliance?.summary?.averageCoverageRate ?? 100);
+  const overduePolicies = followUpItems.filter((item) => item.dueState === 'Overdue').length;
+  const lowCoveragePolicies = followUpItems.filter((item) => Number(item.coverageRate || 0) < 80).length;
+  const reminderPressure = followUpItems.reduce((sum, item) => sum + Number(item.reminderCount || 0), 0);
+  const priorityPolicies = useMemo(() => {
+    const dueRank = { Overdue: 3, 'Due This Week': 2, Open: 1 };
+    return [...followUpItems]
+      .sort((a, b) => (dueRank[b.dueState] || 0) - (dueRank[a.dueState] || 0)
+        || Number(b.pendingEmployees || 0) - Number(a.pendingEmployees || 0)
+        || Number(a.coverageRate || 100) - Number(b.coverageRate || 100))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const audienceRiskMap = useMemo(() => {
+    return [...audienceBreakdown]
+      .sort((a, b) => Number(b.outstandingEmployees || 0) - Number(a.outstandingEmployees || 0)
+        || Number(b.policies || 0) - Number(a.policies || 0))
+      .slice(0, 3);
+  }, [audienceBreakdown]);
+  const audiencePressure = audienceRiskMap[0]?.outstandingEmployees ?? 0;
+  const mostExposedAudience = audienceRiskMap[0]?.audience || 'All Employees';
+  const governancePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (overduePolicies > 0) {
+      plays.push({
+        title: t('Escalate overdue acknowledgements'),
+        note: t('Start with overdue policy items so unresolved compliance gaps do not stay open another week.'),
+      });
+    }
+    if (lowCoveragePolicies > 0 || averageCoverageValue < 90) {
+      plays.push({
+        title: t('Recover low-coverage policies'),
+        note: t('Policies under healthy coverage need a tighter reminder loop and clearer manager ownership.'),
+      });
+    }
+    if (stats.dueThisWeek > 0) {
+      plays.push({
+        title: t('Close this week’s deadlines'),
+        note: t('Use short reminders and direct follow-up before due-this-week items slip into overdue status.'),
+      });
+    }
+    if (reminderPressure > 0) {
+      plays.push({
+        title: t('Review reminder fatigue'),
+        note: t('High reminder counts may signal a communication issue or the need for manager escalation.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain compliance rhythm'),
+      note: t('Policy acknowledgements look stable, so keep the current reminder and publishing cadence.'),
+    }];
+  }, [averageCoverageValue, lowCoveragePolicies, overduePolicies, reminderPressure, stats.dueThisWeek, t]);
+  const strongestSignal = overduePolicies > 0
+    ? t('Some policy acknowledgements are already overdue and need immediate follow-up.')
+    : lowCoveragePolicies > 0
+      ? t(`Coverage is weakest in ${mostExposedAudience}, so that audience should be reviewed first.`)
+      : stats.dueThisWeek > 0
+        ? t('Several policy items are due this week and should be closed before the deadline window ends.')
+        : t('Policy compliance looks steady; focus next on maintaining strong acknowledgement coverage.');
+
   const getDueTone = (state) => {
     if (state === 'Overdue') return 'red';
     if (state === 'Due This Week') return 'yellow';
@@ -208,6 +271,95 @@ export function HRPoliciesPage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Policy Governance Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring policy risk, reminder pressure, and audience coverage into one governance review layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={overduePolicies > 0 ? 'red' : 'green'} label={`${t('Overdue')} ${overduePolicies}`} />
+            <Badge color={lowCoveragePolicies > 0 ? 'orange' : 'gray'} label={`${t('Low Coverage')} ${lowCoveragePolicies}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Overdue Policies'),
+              value: overduePolicies,
+              note: t('Acknowledgement items already outside the expected response window.'),
+              accent: overduePolicies > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Low Coverage'),
+              value: lowCoveragePolicies,
+              note: t('Policies still sitting below healthy acknowledgement coverage.'),
+              accent: lowCoveragePolicies > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Audience Pressure'),
+              value: audiencePressure,
+              note: t('Outstanding acknowledgements in the most exposed audience group.'),
+              accent: audiencePressure > 0 ? '#2563EB' : '#94A3B8',
+            },
+            {
+              label: t('Reminder Load'),
+              value: reminderPressure,
+              note: t('Reminder touchpoints already logged across open policy follow-up items.'),
+              accent: reminderPressure > 0 ? '#7C3AED' : '#94A3B8',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Policy Queue')}</div>
+            {priorityPolicies.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority policy items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {priorityPolicies.map((item) => (
+                  <div key={item.policyID} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
+                      <Badge color={getDueTone(item.dueState)} label={t(item.dueState)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.audience)} • {item.pendingEmployees} {t('pending acknowledgements')}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{t('Coverage')}: {item.coverageRate}% • {t('Reminder Count')}: {item.reminderCount || 0}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <Badge color="accent" label={`${t('Effective Date')}: ${item.effectiveDate || '—'}`} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Compliance Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {governancePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.15fr .85fr', marginBottom: 24, alignItems: 'start' }}>
         <div className="hr-surface-card" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -221,11 +373,11 @@ export function HRPoliciesPage() {
             </div>
           </div>
 
-          {(compliance?.followUpItems || []).length === 0 ? (
+          {followUpItems.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('All published policy items are currently acknowledged or on track.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {(compliance?.followUpItems || []).map((item) => (
+              {followUpItems.map((item) => (
                 <div key={item.policyID} style={{ padding: '12px 14px', borderRadius: 14, border: '1px solid #E7EAEE', background: '#fff' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                     <strong style={{ fontSize: 13.5 }}>{item.title}</strong>
@@ -258,7 +410,7 @@ export function HRPoliciesPage() {
           <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Audience Readiness')}</div>
           <div style={{ fontSize: 14, color: 'var(--gray-500)', marginBottom: 12 }}>{t('Track which employee groups still need policy acknowledgement follow-up.')}</div>
           <div style={{ display: 'grid', gap: 10 }}>
-            {(compliance?.audienceBreakdown || []).map((item) => (
+            {audienceBreakdown.map((item) => (
               <div key={item.audience} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC', border: '1px solid #E7EAEE' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
                   <strong style={{ fontSize: 12.5 }}>{t(item.audience)}</strong>

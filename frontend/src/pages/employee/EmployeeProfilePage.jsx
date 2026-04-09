@@ -16,6 +16,13 @@ import {
   hrGetTickets,
 } from "../../api/index";
 
+const getLoadTone = (value = 0) => {
+  if (value >= 5) return { color: 'red', accent: '#E8321A', bg: '#FEF3F2' };
+  if (value >= 2) return { color: 'yellow', accent: '#B54708', bg: '#FFFAEB' };
+  if (value > 0) return { color: 'accent', accent: '#175CD3', bg: '#EFF8FF' };
+  return { color: 'green', accent: '#027A48', bg: '#ECFDF3' };
+};
+
 export function EmployeeProfilePage() {
   const { user, logout, notificationPreferences, updateNotificationPreference, resolvePath } = useAuth();
   const { t } = useLanguage();
@@ -91,10 +98,34 @@ export function EmployeeProfilePage() {
           const activeDocuments = documents.filter((item) => ['Pending', 'In Progress'].includes(item?.status));
 
           setSnapshotCards([
-            { label: t('profile.pendingApprovals'), value: pendingLeaves.length },
-            { label: t('Expense claims'), value: activeExpenses.length },
-            { label: t('profile.supportCases'), value: openTickets.length },
-            { label: t('profile.documentUpdates'), value: activeDocuments.length },
+            {
+              key: 'approvals',
+              label: t('profile.pendingApprovals'),
+              value: pendingLeaves.length,
+              path: resolvePath('/hr/approvals'),
+              note: t('Review leave requests and unblock pending employee decisions.'),
+            },
+            {
+              key: 'expenses',
+              label: t('Expense claims'),
+              value: activeExpenses.length,
+              path: resolvePath('/hr/expenses'),
+              note: t('Clear reimbursement requests that are still waiting on action.'),
+            },
+            {
+              key: 'support',
+              label: t('profile.supportCases'),
+              value: openTickets.length,
+              path: resolvePath('/hr/tickets'),
+              note: t('Follow open employee support cases before they age further.'),
+            },
+            {
+              key: 'documents',
+              label: t('profile.documentUpdates'),
+              value: activeDocuments.length,
+              path: resolvePath('/hr/documents'),
+              note: t('Issue pending documents and keep request turnaround moving.'),
+            },
           ]);
 
           setRecentActivity([
@@ -121,10 +152,34 @@ export function EmployeeProfilePage() {
           const activeDocuments = documents.filter((item) => ['Pending', 'In Progress'].includes(item?.status));
 
           setSnapshotCards([
-            { label: t('profile.openTasks'), value: openTasks.length },
-            { label: t('profile.activeGoals'), value: activeGoals.length },
-            { label: t('profile.supportCases'), value: openTickets.length },
-            { label: t('profile.learningItems'), value: activeTraining.length + activeDocuments.length },
+            {
+              key: 'tasks',
+              label: t('profile.openTasks'),
+              value: openTasks.length,
+              path: resolvePath('/employee/tasks'),
+              note: t('Close active work items and unblock any tasks still in motion.'),
+            },
+            {
+              key: 'goals',
+              label: t('profile.activeGoals'),
+              value: activeGoals.length,
+              path: resolvePath('/employee/goals'),
+              note: t('Review your current goals and keep progress updates moving forward.'),
+            },
+            {
+              key: 'support',
+              label: t('profile.supportCases'),
+              value: openTickets.length,
+              path: resolvePath('/employee/tickets'),
+              note: t('Track open support requests and respond quickly if more context is needed.'),
+            },
+            {
+              key: 'learning',
+              label: t('profile.learningItems'),
+              value: activeTraining.length + activeDocuments.length,
+              path: resolvePath('/employee/training'),
+              note: t('Finish training or document follow-up to keep your growth momentum steady.'),
+            },
           ]);
 
           setRecentActivity([
@@ -144,10 +199,66 @@ export function EmployeeProfilePage() {
     };
 
     loadProfileActivity();
-  }, [t, user]);
+  }, [resolvePath, t, user]);
 
   const roleLabel = user?.role ? t(`role.${user.role}`) : '';
   const attentionCount = snapshotCards.reduce((sum, card) => sum + Number(card.value || 0), 0);
+  const activeLanesCount = snapshotCards.filter((card) => Number(card.value || 0) > 0).length;
+  const highPressureCount = snapshotCards.filter((card) => Number(card.value || 0) >= 3).length;
+  const priorityActionQueue = useMemo(
+    () => [...snapshotCards]
+      .filter((card) => Number(card.value || 0) > 0)
+      .sort((a, b) => Number(b.value || 0) - Number(a.value || 0) || String(a.label || '').localeCompare(String(b.label || '')))
+      .slice(0, 4),
+    [snapshotCards],
+  );
+  const activityPressureMap = useMemo(
+    () => [...snapshotCards]
+      .sort((a, b) => Number(b.value || 0) - Number(a.value || 0) || String(a.label || '').localeCompare(String(b.label || '')))
+      .slice(0, 4),
+    [snapshotCards],
+  );
+  const profilePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (attentionCount > 0) {
+      plays.push({
+        title: t('Clear your highest-load lane first'),
+        note: t('Start with the area carrying the most active items so your day gets lighter fastest.'),
+      });
+    }
+    if (highPressureCount > 0) {
+      plays.push({
+        title: t('Protect focus on bigger queues'),
+        note: t('A few work lanes are carrying multiple items, so block time for them before context switching.'),
+      });
+    }
+    if (recentActivity.length > 0) {
+      plays.push({
+        title: t('Use recent activity as your restart point'),
+        note: t('The latest updates show where to resume work without needing to re-scan every page.'),
+      });
+    }
+    if (activeLanesCount > 1) {
+      plays.push({
+        title: t('Balance across active lanes'),
+        note: t('Spreading quick progress across tasks, goals, and support items keeps momentum visible.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Everything is in a good place'),
+      note: t('Your workspace looks calm right now, so keep the current rhythm and check back when new work lands.'),
+    }];
+  }, [activeLanesCount, attentionCount, highPressureCount, recentActivity.length, t]);
+  const strongestSignal = attentionCount === 0
+    ? t('Your workspace is currently on track, with no major follow-up pressure standing out.')
+    : highPressureCount > 0
+      ? t('One or more work lanes are carrying a heavier queue, so focused attention there will create the biggest payoff.')
+      : recentActivity.length > 0
+        ? t('Recent updates point to the best next actions, so resuming from the latest activity will keep momentum high.')
+        : t('A few open items remain, and a quick pass through your focus queue should clear them steadily.');
+
   const quickActions = useMemo(() => {
     if (user?.role === 'HRManager' || user?.role === 'Admin') {
       return [
@@ -218,6 +329,99 @@ export function EmployeeProfilePage() {
 
       <div className="profile-layout-grid">
         <div className="profile-layout-main">
+          <div className="profile-card profile-card-modern">
+            <h3>{t('Workspace Momentum Radar')}</h3>
+            <p className="profile-card-subtitle">
+              {t('See where your current workload is concentrated and what to handle next.')}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginTop: 14 }}>
+              {[
+                { label: t('Attention Load'), value: activityLoading ? '—' : attentionCount, accent: attentionCount > 0 ? '#E8321A' : '#027A48', note: t('Total active items across your current workspace.') },
+                { label: t('Active Lanes'), value: activityLoading ? '—' : activeLanesCount, accent: '#175CD3', note: t('Distinct work lanes currently carrying open items.') },
+                { label: t('High Pressure'), value: activityLoading ? '—' : highPressureCount, accent: '#B54708', note: t('Areas with multiple items that may need focused time.') },
+                { label: t('Recent Signals'), value: activityLoading ? '—' : recentActivity.length, accent: '#7C3AED', note: t('Recent updates you can use as a quick restart point.') },
+              ].map((item) => (
+                <div key={item.label} style={{ border: '1px solid #EAECF0', borderRadius: 16, padding: '14px 14px', background: '#fff' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 6 }}>{item.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: item.accent }}>{item.value}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 14, border: '1px solid #FDE68A', background: '#FFFBEB' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#B45309', marginBottom: 6 }}>{t('Strongest signal')}</div>
+              <div style={{ fontSize: 13.5, color: '#92400E' }}>{activityLoading ? t('Loading...') : strongestSignal}</div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1.05fr .95fr', gap: 14, marginTop: 16 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 10 }}>{t('Priority Focus Queue')}</div>
+                {activityLoading ? (
+                  <div className="profile-activity-loading"><Spinner size={18} /></div>
+                ) : priorityActionQueue.length === 0 ? (
+                  <div className="profile-activity-empty">{t('No urgent actions are waiting right now.')}</div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {priorityActionQueue.map((card) => {
+                      const tone = getLoadTone(Number(card.value || 0));
+                      return (
+                        <div key={card.key || card.label} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                            <div>
+                              <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{card.label}</div>
+                              <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 4 }}>{card.note}</div>
+                            </div>
+                            <span style={{ minWidth: 32, height: 32, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: tone.bg, color: tone.accent, fontWeight: 700 }}>
+                              {card.value}
+                            </span>
+                          </div>
+                          {card.path ? (
+                            <div style={{ marginTop: 10 }}>
+                              <Btn size="sm" variant="ghost" onClick={() => navigate(card.path)}>{t('Open')}</Btn>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 10 }}>{t('Action Playbook')}</div>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {profilePlaybook.map((item) => (
+                      <div key={item.title} style={{ border: '1px solid #EAECF0', borderRadius: 14, padding: '12px 14px', background: '#fff' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{item.title}</div>
+                        <div style={{ fontSize: 12.5, color: 'var(--gray-500)', marginTop: 6 }}>{item.note}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--gray-500)', marginBottom: 10 }}>{t('Pressure Map')}</div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {activityPressureMap.map((card) => {
+                      const tone = getLoadTone(Number(card.value || 0));
+                      return (
+                        <div key={`pressure-${card.key || card.label}`} style={{ border: '1px solid #EAECF0', borderRadius: 12, padding: '10px 12px', background: '#fff' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                            <div style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{card.label}</div>
+                            <span style={{ color: tone.accent, fontWeight: 700 }}>{card.value}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="profile-card profile-card-modern">
             <h3>{t('Quick Actions')}</h3>
             <p className="profile-card-subtitle">

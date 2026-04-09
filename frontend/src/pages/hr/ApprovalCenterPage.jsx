@@ -30,8 +30,28 @@ const STATUS_COLORS = {
 };
 
 function formatAmount(value) {
-  return `$${Number(value || 0).toFixed(2)}`;
+  const preferredCurrency = typeof document !== 'undefined'
+    ? (document.documentElement.dataset.currencyPreference || 'EGP')
+    : 'EGP';
+  const locale = typeof document !== 'undefined' && document.documentElement.lang === 'ar' ? 'ar-EG' : 'en-US';
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: preferredCurrency,
+    minimumFractionDigits: 2,
+  }).format(Number(value || 0));
 }
+
+const downloadTextFile = (filename, content, mimeType = 'text/csv;charset=utf-8') => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 export function HRApprovalCenterPage() {
   const toast = useToast();
@@ -135,6 +155,72 @@ export function HRApprovalCenterPage() {
     }),
     [activeTickets.length, pendingDocuments.length, pendingExpenses.length, pendingLeaves.length],
   );
+
+  const triageItems = approvalSnapshot?.followUpItems || [];
+  const servicePressureCards = useMemo(() => ([
+    {
+      label: t('Leave approvals'),
+      value: stats.leaves,
+      note: t('Pending time-off decisions still waiting for action.'),
+      accent: '#F59E0B',
+      path: resolvePath('/hr/attendance'),
+    },
+    {
+      label: t('Expense reviews'),
+      value: stats.expenses,
+      note: t('Claims still moving through financial review.'),
+      accent: '#8B5CF6',
+      path: resolvePath('/hr/expenses'),
+    },
+    {
+      label: t('Document updates'),
+      value: stats.documents,
+      note: t('Requests that still need issuance or follow-up.'),
+      accent: '#16A34A',
+      path: resolvePath('/hr/documents'),
+    },
+    {
+      label: t('Support follow-up'),
+      value: stats.tickets,
+      note: t('Open employee support cases still in motion.'),
+      accent: '#0EA5E9',
+      path: resolvePath('/hr/tickets'),
+    },
+  ]), [resolvePath, stats.documents, stats.expenses, stats.leaves, stats.tickets, t]);
+
+  const triagePlaybook = useMemo(() => {
+    const plays = [];
+
+    if ((approvalSnapshot?.slaSummary?.overdueCount ?? 0) > 0) {
+      plays.push({
+        title: t('Resolve overdue cases first'),
+        note: t('Clear the oldest items first so service SLAs recover quickly and backlog pressure starts dropping.'),
+      });
+    }
+    if (stats.expenses > 0) {
+      plays.push({
+        title: t('Unblock finance review'),
+        note: t('Move submitted claims forward so reimbursements do not create avoidable employee friction.'),
+      });
+    }
+    if (stats.tickets > 0) {
+      plays.push({
+        title: t('Protect the employee experience'),
+        note: t('Respond to open support issues quickly, especially when the queue includes critical or aging cases.'),
+      });
+    }
+    if (stats.documents > 0) {
+      plays.push({
+        title: t('Keep document turnaround predictable'),
+        note: t('Issue routine letters and confirmations before pending requests start slipping past expectations.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Maintain the current approval rhythm'),
+      note: t('Approval queues are currently healthy. Keep the same daily review cadence in place.'),
+    }];
+  }, [approvalSnapshot?.slaSummary?.overdueCount, stats.documents, stats.expenses, stats.tickets, t]);
 
   const selectedCounts = useMemo(() => ({
     leave: selectedItems.leave.length,
@@ -301,6 +387,27 @@ export function HRApprovalCenterPage() {
     }
   };
 
+  const handleExportTriage = () => {
+    const rows = [
+      ['Type', 'Employee', 'Summary', 'Status', 'Waiting Days', 'SLA State', 'Path'],
+      ...triageItems.map((item) => [
+        item.type || '',
+        item.employeeName || '',
+        item.summary || '',
+        item.status || '',
+        item.waitingDays ?? '',
+        item.slaState || '',
+        item.path || '',
+      ]),
+    ];
+
+    const csv = rows
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    downloadTextFile('approval-triage-watch.csv', csv);
+  };
+
   const renderBulkToolbar = (section, items, idKey, actions = []) => (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
       <span style={{ fontSize: 11.5, color: 'var(--gray-500)' }}>Selected: {selectedCounts[section] || 0}</span>
@@ -394,6 +501,72 @@ export function HRApprovalCenterPage() {
           </div>
         ))}
       </div>
+
+      {!loading && (
+        <div className="hr-surface-card" style={{ padding: 20, marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Approval Triage Radar')}</div>
+              <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('See where approval pressure is building and what should be handled next across HR service lanes.')}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Badge label={`${t('Overdue')} ${approvalSnapshot?.slaSummary?.overdueCount ?? 0}`} color={(approvalSnapshot?.slaSummary?.overdueCount ?? 0) > 0 ? 'red' : 'green'} />
+              <Badge label={`${t('Oldest open (days)')} ${approvalSnapshot?.slaSummary?.oldestOpenDays ?? 0}`} color={(approvalSnapshot?.slaSummary?.oldestOpenDays ?? 0) > 2 ? 'orange' : 'green'} />
+              <Btn size="sm" variant="ghost" onClick={handleExportTriage} disabled={!triageItems.length}>{t('Export triage CSV')}</Btn>
+            </div>
+          </div>
+
+          <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+            {servicePressureCards.map((card) => (
+              <button
+                key={card.label}
+                type="button"
+                onClick={() => navigate(card.path)}
+                className="workspace-journey-card"
+                style={{ textAlign: 'left', cursor: 'pointer' }}
+              >
+                <div className="workspace-journey-title">{card.label}</div>
+                <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+                <div className="workspace-journey-note">{card.note}</div>
+              </button>
+            ))}
+          </div>
+
+          <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.1fr .9fr' }}>
+            <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Immediate Decision Queue')}</div>
+              {triageItems.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No approval escalations are currently outside the expected response window.')}</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {triageItems.slice(0, 4).map((item) => (
+                    <div key={item.id} className="workspace-action-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                        <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                        <Badge color={getSlaTone(item.slaState)} label={t(item.slaState)} />
+                      </div>
+                      <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{t(item.type)} • {item.summary}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--gray-700)' }}>{t('Waiting')} {item.waitingDays} {t('days')} • {t('Status')}: {t(item.status)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Approver Playbook')}</div>
+              <div style={{ display: 'grid', gap: 10 }}>
+                {triagePlaybook.map((item) => (
+                  <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                    <div className="workspace-focus-label">{item.title}</div>
+                    <div className="workspace-focus-note">{item.note}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!loading && (
         <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.2fr .8fr', marginBottom: 24, alignItems: 'start' }}>

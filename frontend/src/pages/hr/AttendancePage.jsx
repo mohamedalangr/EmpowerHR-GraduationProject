@@ -34,6 +34,14 @@ const EMPTY_WATCH = {
   followUpItems: [],
 };
 
+const getAttendanceTone = (item) => {
+  if (item?.followUpState === 'Partial Day') return 'red';
+  if (item?.followUpState === 'Open Shift') return 'orange';
+  if (item?.followUpState === 'Leave Approval Pending') return 'yellow';
+  if (item?.status === 'Approved' || item?.status === 'Present') return 'green';
+  return 'accent';
+};
+
 export function HRAttendancePage() {
   const toast = useToast();
   const { t } = useLanguage();
@@ -82,6 +90,62 @@ export function HRAttendancePage() {
       followUp: watchSummary.followUpCount ?? 0,
     };
   }, [attendance, leaveRequests, watchSummary]);
+
+  const openShiftCount = watchSummary.clockedInCount ?? followUpItems.filter((item) => item.followUpState === 'Open Shift').length;
+  const partialDayCount = watchSummary.partialCount ?? followUpItems.filter((item) => item.followUpState === 'Partial Day').length;
+  const attendanceFocusQueue = useMemo(() => {
+    const stateRank = { 'Partial Day': 3, 'Open Shift': 2, 'Leave Approval Pending': 1 };
+    return [...followUpItems]
+      .sort((a, b) => (stateRank[b.followUpState] || 0) - (stateRank[a.followUpState] || 0)
+        || String(a.date || '').localeCompare(String(b.date || ''))
+        || String(a.employeeName || '').localeCompare(String(b.employeeName || '')))
+      .slice(0, 4);
+  }, [followUpItems]);
+  const attendancePressureMap = useMemo(() => {
+    return [...departmentBreakdown]
+      .sort((a, b) => Number(b.pendingLeaveCount || 0) - Number(a.pendingLeaveCount || 0)
+        || Number(b.clockedInCount || 0) - Number(a.clockedInCount || 0)
+        || Number(b.partialCount || 0) - Number(a.partialCount || 0))
+      .slice(0, 4);
+  }, [departmentBreakdown]);
+  const attendancePlaybook = useMemo(() => {
+    const plays = [];
+
+    if (partialDayCount > 0) {
+      plays.push({
+        title: t('Investigate partial-day records first'),
+        note: t('Start with partial attendance issues so manager outreach and payroll corrections can happen before they compound.'),
+      });
+    }
+    if (openShiftCount > 0) {
+      plays.push({
+        title: t('Close open attendance records'),
+        note: t('Employees still clocked in may need a same-day closeout to keep attendance and payroll clean.'),
+      });
+    }
+    if (stats.pending > 0) {
+      plays.push({
+        title: t('Clear the leave queue'),
+        note: t('Pending leave requests should be reviewed quickly so schedule coverage and staffing plans stay reliable.'),
+      });
+    }
+    if (attendancePressureMap.some((item) => Number(item.pendingLeaveCount || 0) > 0 || Number(item.partialCount || 0) > 0)) {
+      plays.push({
+        title: t('Focus on the busiest department'),
+        note: t('Work the department carrying the most leave or attendance pressure to reduce daily operations risk fastest.'),
+      });
+    }
+
+    return plays.length ? plays.slice(0, 4) : [{
+      title: t('Keep attendance rhythm steady'),
+      note: t('Attendance operations look stable, so keep the current review and approval cadence in place.'),
+    }];
+  }, [attendancePressureMap, openShiftCount, partialDayCount, stats.pending, t]);
+  const strongestSignal = partialDayCount > 0
+    ? t('Some attendance records show partial days and should be clarified before they create payroll or compliance follow-up.')
+    : stats.pending > 0
+      ? t('The leave queue still needs attention, so the next best win is clearing pending approvals quickly.')
+      : t('Attendance flow looks stable; keep open shifts and leave reviews moving so daily issues do not stack up.');
 
   const attendancePulseCards = useMemo(() => ([
     {
@@ -234,6 +298,96 @@ export function HRAttendancePage() {
         ))}
       </div>
 
+      <div className="hr-surface-card" style={{ background: 'var(--white)', borderRadius: 24, padding: 20, border: '1px solid #EAECF0', marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Attendance Response Radar')}</div>
+            <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('Bring leave backlog, open shifts, and department pressure into one daily attendance response layer.')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Badge color={partialDayCount > 0 ? 'red' : 'green'} label={`${t('Partial days')} ${partialDayCount}`} />
+            <Badge color={stats.pending > 0 ? 'yellow' : 'gray'} label={`${t('Pending leave')} ${stats.pending}`} />
+          </div>
+        </div>
+
+        <div className="workspace-journey-strip" style={{ marginBottom: 16 }}>
+          {[
+            {
+              label: t('Open Shifts'),
+              value: openShiftCount,
+              note: t('Employees still clocked in who may need same-day attendance closeout.'),
+              accent: openShiftCount > 0 ? '#F59E0B' : '#22C55E',
+            },
+            {
+              label: t('Partial Days'),
+              value: partialDayCount,
+              note: t('Attendance records that may need manager clarification or payroll review.'),
+              accent: partialDayCount > 0 ? '#E8321A' : '#22C55E',
+            },
+            {
+              label: t('Pending Leave'),
+              value: stats.pending,
+              note: t('Leave requests still waiting for a decision before schedules are final.'),
+              accent: stats.pending > 0 ? '#2563EB' : '#22C55E',
+            },
+            {
+              label: t('Today Logged'),
+              value: stats.attendanceToday,
+              note: t('Attendance activity already recorded today across the workforce.'),
+              accent: '#7C3AED',
+            },
+          ].map((card) => (
+            <div key={card.label} className="workspace-journey-card">
+              <div className="workspace-journey-title">{card.label}</div>
+              <div className="workspace-journey-value" style={{ color: card.accent }}>{card.value}</div>
+              <div className="workspace-journey-note">{card.note}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="hr-panel-grid" style={{ gridTemplateColumns: '1.05fr .95fr', alignItems: 'start' }}>
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Priority Attendance Queue')}</div>
+            {attendanceFocusQueue.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: 'var(--gray-500)' }}>{t('No priority attendance items are flagged right now.')}</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {attendanceFocusQueue.map((item, index) => (
+                  <div key={`${item.type}-${item.attendanceID || item.leaveRequestID || index}`} className="workspace-action-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <strong style={{ fontSize: 13.5 }}>{item.employeeName}</strong>
+                      <Badge color={getAttendanceTone(item)} label={t(item.followUpState || item.status)} />
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-600)', marginBottom: 4 }}>{item.department || '—'} • {item.date || '—'}</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginBottom: 6 }}>{item.summary}</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {item.type && <Badge color="accent" label={t(item.type)} />}
+                      {item.status && <Badge color="gray" label={t(item.status)} />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="hr-surface-card" style={{ padding: 16, background: '#FCFCFD' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 8 }}>{t('Attendance Playbook')}</div>
+            <div className="workspace-focus-card" style={{ background: '#fff', marginBottom: 10 }}>
+              <div className="workspace-focus-label">{t('Strongest Signal')}</div>
+              <div className="workspace-focus-note">{strongestSignal}</div>
+            </div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {attendancePlaybook.map((item) => (
+                <div key={item.title} className="workspace-focus-card" style={{ background: '#fff' }}>
+                  <div className="workspace-focus-label">{item.title}</div>
+                  <div className="workspace-focus-note">{item.note}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: 'Attendance Logged Today', value: stats.attendanceToday, accent: '#E8321A' },
@@ -284,19 +438,26 @@ export function HRAttendancePage() {
         </div>
 
         <div className="hr-surface-card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 10 }}>{t('Department Snapshot')}</div>
-          {departmentBreakdown.length === 0 ? (
+          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gray-500)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Department Pressure Map')}</div>
+          <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 10 }}>{t('See which departments are carrying the most leave or attendance follow-up pressure today.')}</div>
+          {attendancePressureMap.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>{t('No attendance summary is available yet.')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {departmentBreakdown.map((item) => (
+              {attendancePressureMap.map((item) => (
                 <div key={item.department} style={{ padding: '10px 12px', borderRadius: 12, background: '#F8FAFC' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <strong>{item.department}</strong>
-                    <span style={{ fontSize: 12.5, fontWeight: 700 }}>{item.attendanceCount ?? 0}</span>
+                    <Badge
+                      color={Number(item.pendingLeaveCount || 0) > 0 ? 'yellow' : Number(item.partialCount || 0) > 0 ? 'red' : 'green'}
+                      label={`${item.attendanceCount ?? 0} ${t('logs')}`}
+                    />
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 6 }}>
                     {item.clockedInCount ?? 0} {t('open')} · {item.partialCount ?? 0} {t('partial')} · {item.pendingLeaveCount ?? 0} {t('pending')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: 'var(--gray-700)', marginTop: 6 }}>
+                    {t('Focus first where leave backlog and partial attendance are highest.')}
                   </div>
                 </div>
               ))}
