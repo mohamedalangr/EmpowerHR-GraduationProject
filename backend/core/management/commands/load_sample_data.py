@@ -52,7 +52,7 @@ class Command(BaseCommand):
 
         jobs_data = [
             {
-                'title': 'مهندس برمجيات',
+                'title': 'Software Engineer',
                 'description': 'تطوير خصائص لأنظمة الموارد البشرية، صيانة واجهات API، ودعم الإطلاقات الآمنة داخل السوق المصري.',
                 'min_experience_years': 2,
                 'required_degree': 'Bachelor',
@@ -64,7 +64,7 @@ class Command(BaseCommand):
                 'is_active': True,
             },
             {
-                'title': 'محلل بيانات موارد بشرية',
+                'title': 'HR Data Analyst',
                 'description': 'تحليل بيانات الموظفين، بناء نماذج تنبؤية، وتقديم تقارير تشغيلية تساعد فرق الموارد البشرية في مصر.',
                 'min_experience_years': 3,
                 'required_degree': 'Master',
@@ -76,7 +76,7 @@ class Command(BaseCommand):
                 'is_active': True,
             },
             {
-                'title': 'مدير موارد بشرية',
+                'title': 'HR Manager',
                 'description': 'قيادة عمليات الأفراد، تخطيط القوى العاملة، دعم الموظفين، وضمان الالتزام بالسياسات المحلية.',
                 'min_experience_years': 5,
                 'required_degree': 'Bachelor',
@@ -94,7 +94,7 @@ class Command(BaseCommand):
             job, _ = Job.objects.update_or_create(title=job_data['title'], defaults=job_data)
             jobs[job.title] = job
 
-        software_job = jobs.get('مهندس برمجيات')
+        software_job = jobs.get('Software Engineer')
         if software_job:
             Submission.objects.update_or_create(
                 job=software_job,
@@ -112,7 +112,7 @@ class Command(BaseCommand):
                             'from_stage': 'Applied',
                             'to_stage': 'Shortlisted',
                             'note': 'تجاوزت فرز السيرة الذاتية بوضوح في الواجهة الأمامية وبناء الأنظمة الداخلية.',
-                            'actor_name': 'نهى عبد الرحمن',
+                            'actor_name': 'Noha Abdelrahman',
                             'actor_role': 'HRManager',
                             'occurred_at': (now - timedelta(days=1)).isoformat(),
                         }
@@ -147,7 +147,7 @@ class Command(BaseCommand):
                             'from_stage': 'Shortlisted',
                             'to_stage': 'Interview',
                             'note': 'تم حجز المقابلة الفنية يوم الخميس الساعة 11 صباحًا.',
-                            'actor_name': 'محمد عبد الله',
+                            'actor_name': 'Mohamed Abdallah',
                             'actor_role': 'TeamLeader',
                             'occurred_at': (now - timedelta(days=2)).isoformat(),
                         }
@@ -350,7 +350,7 @@ class Command(BaseCommand):
 
         EmployeeGoal.objects.update_or_create(
             employee=team_member,
-            title='إتمام قائمة إطلاق واجهة الموارد البشرية',
+            title='Complete HR Platform Launch Checklist',
             defaults={
                 'description': 'إغلاق العوائق المتبقية، مراجعة خطة التراجع، والحفاظ على جاهزية الإطلاق.',
                 'category': 'Performance',
@@ -363,7 +363,7 @@ class Command(BaseCommand):
         )
         EmployeeGoal.objects.update_or_create(
             employee=team_member,
-            title='استكمال خطة تعلم تصميم الأنظمة',
+            title='Finish System Design Learning Plan',
             defaults={
                 'description': 'إنهاء وحدة التوسع في الخلفية ومشاركة الملخص في الاجتماع الفردي القادم.',
                 'category': 'Development',
@@ -377,7 +377,7 @@ class Command(BaseCommand):
 
         WorkTask.objects.update_or_create(
             employee=team_member,
-            title='حل عائق الإصدار مع فريق الجودة',
+            title='Resolve Release Blocker with QA',
             defaults={
                 'description': 'فحص اختبار الرجوع غير المستقر وتثبيت قرار الإطلاق قبل الظهر.',
                 'priority': 'High',
@@ -390,7 +390,7 @@ class Command(BaseCommand):
         )
         WorkTask.objects.update_or_create(
             employee=team_member,
-            title='إنهاء ملاحظات تسليم السبرنت',
+            title='Finalize Sprint Handover Notes',
             defaults={
                 'description': 'تلخيص ما تم إنجازه والمخاطر المفتوحة وخطة التغطية للسبرنت القادم.',
                 'priority': 'Medium',
@@ -405,7 +405,7 @@ class Command(BaseCommand):
         if team_leader:
             EmployeeGoal.objects.update_or_create(
                 employee=team_leader,
-                title='استكمال مراجعة المتابعة الأسبوعية للفريق',
+                title='Complete Weekly Team Coaching Review',
                 defaults={
                     'description': 'مراجعة سرعة الفريق والعوائق الحالية والاستعداد قبل اجتماع الجمعة.',
                     'category': 'Leadership',
@@ -418,7 +418,7 @@ class Command(BaseCommand):
             )
             WorkTask.objects.update_or_create(
                 employee=team_leader,
-                title='مراجعة عوائق الفريق والموافقات العاجلة',
+                title='Review Squad Blockers and Approvals',
                 defaults={
                     'description': 'إنهاء الموافقات العاجلة ورفع العوائق من قائمة الإطلاق.',
                     'priority': 'High',
@@ -431,7 +431,7 @@ class Command(BaseCommand):
             )
 
         TrainingCourse.objects.update_or_create(
-            title='مراجعة الأمن البرمجي',
+            title='Secure Coding Refresher',
             defaults={
                 'description': 'محتوى امتثال يركز على إدارة الأسرار، سجلات التدقيق، ونقاط المراجعة الآمنة.',
                 'category': 'Compliance',
@@ -456,7 +456,7 @@ class Command(BaseCommand):
             },
         )
         TrainingCourse.objects.update_or_create(
-            title='تحسين أداء تطبيق React',
+            title='Advanced React Performance',
             defaults={
                 'description': 'مسار تقني يركز على قياس الأداء وmemoization وتحسين سرعة لوحات المتابعة.',
                 'category': 'Technical',
@@ -476,7 +476,7 @@ class Command(BaseCommand):
 
         PerformanceReview.objects.update_or_create(
             employee=team_member,
-            reviewPeriod='الربع الأول 2026',
+            reviewPeriod='Q1 2026',
             defaults={
                 'reviewType': 'Quarterly',
                 'overallRating': 4,
@@ -492,7 +492,7 @@ class Command(BaseCommand):
 
         SuccessionPlan.objects.update_or_create(
             employee=team_member,
-            targetRole='مهندس برمجيات أول',
+            targetRole='Senior Software Engineer',
             defaults={
                 'readiness': '6-12 Months',
                 'status': 'On Track',
@@ -506,7 +506,7 @@ class Command(BaseCommand):
 
         OnboardingPlan.objects.update_or_create(
             employee=team_member,
-            title='خطة الانتقال داخل فريق المنصة',
+            title='Platform Squad Transition Plan',
             defaults={
                 'planType': 'Transition',
                 'status': 'In Progress',
@@ -555,7 +555,7 @@ class Command(BaseCommand):
         )
 
         PolicyAnnouncement.objects.update_or_create(
-            title='تحديث سياسة العمل الهجين وأمن الأجهزة',
+            title='Updated Remote Work and Security Policy',
             defaults={
                 'category': 'Policy',
                 'audience': 'All Employees',
@@ -577,7 +577,7 @@ class Command(BaseCommand):
             },
         )
         PolicyAnnouncement.objects.update_or_create(
-            title='إقرار ربع سنوي بأمن المعلومات',
+            title='Quarterly Information Security Acknowledgement',
             defaults={
                 'category': 'Announcement',
                 'audience': 'All Employees',
@@ -595,7 +595,7 @@ class Command(BaseCommand):
 
         RecognitionAward.objects.update_or_create(
             employee=team_member,
-            title='تقدير لإنهاء السبرنت بنجاح',
+            title='Sprint Delivery Recognition',
             recognitionDate=today - timedelta(days=5),
             defaults={
                 'category': 'Achievement',
@@ -607,7 +607,7 @@ class Command(BaseCommand):
         if team_leader:
             RecognitionAward.objects.update_or_create(
                 employee=team_leader,
-                title='إشادة بدور التوجيه والمتابعة',
+                title='Mentorship Spotlight',
                 recognitionDate=today - timedelta(days=9),
                 defaults={
                     'category': 'Leadership',
@@ -619,7 +619,7 @@ class Command(BaseCommand):
 
         BenefitEnrollment.objects.update_or_create(
             employee=team_member,
-            benefitName='الخطة الطبية المميزة',
+            benefitName='Premium Medical Plan',
             defaults={
                 'benefitType': 'Medical',
                 'provider': 'رعاية النيل',
@@ -634,7 +634,7 @@ class Command(BaseCommand):
         )
         BenefitEnrollment.objects.update_or_create(
             employee=team_member,
-            benefitName='بدل العافية الشهرية',
+            benefitName='Wellness Allowance',
             defaults={
                 'benefitType': 'Wellness',
                 'provider': 'EmpowerHR Flex',
@@ -650,7 +650,7 @@ class Command(BaseCommand):
 
         ExpenseClaim.objects.update_or_create(
             employee=team_member,
-            title='مصاريف تنقل ورشة عميل بالقاهرة',
+            title='Client Workshop Travel',
             expenseDate=today - timedelta(days=7),
             defaults={
                 'category': 'Travel',
@@ -662,7 +662,7 @@ class Command(BaseCommand):
         )
         ExpenseClaim.objects.update_or_create(
             employee=team_member,
-            title='مستلزمات مكتب منزلي',
+            title='Home Office Accessories',
             expenseDate=today - timedelta(days=22),
             defaults={
                 'category': 'Supplies',
@@ -677,7 +677,7 @@ class Command(BaseCommand):
 
         DocumentRequest.objects.update_or_create(
             employee=team_member,
-            documentType='خطاب جهة عمل',
+            documentType='Employment Letter',
             purpose='موعد سفارة',
             defaults={
                 'notes': 'يرجى تضمين آخر مسمى وظيفي وتاريخ بدء العمل.',
@@ -688,7 +688,7 @@ class Command(BaseCommand):
         )
         DocumentRequest.objects.update_or_create(
             employee=team_member,
-            documentType='مفردات مرتب',
+            documentType='Salary Certificate',
             purpose='تحديث بيانات البنك',
             defaults={
                 'notes': 'تم إصدارها لدعم تحديث ملف البنك.',
@@ -701,7 +701,7 @@ class Command(BaseCommand):
 
         SupportTicket.objects.update_or_create(
             employee=team_member,
-            subject='اتصال الـ VPN غير مستقر',
+            subject='VPN Access Still Unstable',
             defaults={
                 'category': 'IT',
                 'priority': 'Critical',
@@ -712,7 +712,7 @@ class Command(BaseCommand):
         )
         SupportTicket.objects.update_or_create(
             employee=team_member,
-            subject='تحديث عنوان بطاقة التأمين',
+            subject='Benefit Card Address Update',
             defaults={
                 'category': 'Benefits',
                 'priority': 'Medium',
