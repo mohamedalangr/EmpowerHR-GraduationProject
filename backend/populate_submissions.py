@@ -10,107 +10,107 @@ from django.core.files.base import ContentFile
 # Sample CV texts
 SAMPLE_CVS = [
     {
-        'name': 'أحمد حسن',
+        'name': 'Ahmed Hassan',
         'email': 'ahmed.hassan@email.com',
         'cv_text': """
-        أحمد حسن - مهندس برمجيات
+        Ahmed Hassan - Software Engineer
 
-        الخبرات:
-        - 5 سنوات كمطور Python في شركة حلول رقمية بالقاهرة
-        - 3 سنوات كمطور Django في شركة خدمات ويب مصرية
-        - سنتان كمطور JavaScript في شركة ناشئة محلية
+        Experience:
+        - 5 years as a Python developer at a digital solutions company in Cairo
+        - 3 years as a Django developer at an Egyptian web services company
+        - 2 years as a JavaScript developer at a local startup
 
-        المهارات:
+        Skills:
         - Python, Django, JavaScript, React, SQL
         - REST APIs, Git, Docker
-        - بناء لوحات تشغيل داخلية وأنظمة موارد بشرية
+        - Built internal dashboards and HR systems
 
-        التعليم:
-        بكالوريوس حاسبات ومعلومات - جامعة القاهرة
+        Education:
+        B.Sc. in Computer Science - Cairo University
         """,
         'job_id': 1
     },
     {
-        'name': 'سارة عبد الله',
+        'name': 'Sara Abdullah',
         'email': 'sara.abdullah@email.com',
         'cv_text': """
-        سارة عبد الله - محللة بيانات موارد بشرية
+        Sara Abdullah - HR Data Analyst
 
-        الخبرات:
-        - 4 سنوات كمحللة بيانات في شركة خدمات أعمال
-        - 3 سنوات كمهندسة تعلم آلي في شركة تحليلات مصرية
-        - سنتان في إعداد تقارير Python وSQL لفرق الموارد البشرية
+        Experience:
+        - 4 years as a data analyst at a business services company
+        - 3 years as a machine learning engineer at an Egyptian analytics company
+        - 2 years preparing Python and SQL reports for HR teams
 
-        المهارات:
+        Skills:
         - Python, Machine Learning, SQL, Power BI
         - Statistics, Data Visualization, Pandas
-        - تحليلات دوران الموظفين والتقارير التشغيلية
+        - Employee attrition analytics and operational reporting
 
-        التعليم:
-        ماجستير علوم البيانات - جامعة عين شمس
+        Education:
+        M.Sc. in Data Science - Ain Shams University
         """,
         'job_id': 2
     },
     {
-        'name': 'محمود فوزي',
+        'name': 'Mahmoud Fawzy',
         'email': 'mahmoud.fawzy@email.com',
         'cv_text': """
-        محمود فوزي - مدير موارد بشرية
+        Mahmoud Fawzy - HR Manager
 
-        الخبرات:
-        - 6 سنوات كمدير موارد بشرية في شركة مصرية متوسطة
-        - 4 سنوات في التوظيف واكتساب المواهب
-        - 3 سنوات في علاقات الموظفين وإدارة الأداء
+        Experience:
+        - 6 years as an HR manager at a mid-sized Egyptian company
+        - 4 years in recruitment and talent acquisition
+        - 3 years in employee relations and performance management
 
-        المهارات:
+        Skills:
         - HR Management, Recruitment, Communication
         - Leadership, Training, Conflict Resolution
         - Performance Management, Employee Engagement
 
-        التعليم:
-        ماجستير إدارة أعمال - الأكاديمية العربية
+        Education:
+        MBA - Arab Academy
         """,
         'job_id': 3
     },
     {
-        'name': 'آية سمير',
+        'name': 'Aya Sameer',
         'email': 'aya.sameer@email.com',
         'cv_text': """
-        آية سمير - مطورة Full Stack
+        Aya Sameer - Full Stack Developer
 
-        الخبرات:
-        - 4 سنوات كمطورة Backend في شركة حلول ويب بالقاهرة
-        - 3 سنوات كمهندسة Full Stack في شركة تقنية مصرية
-        - سنتان في تطوير أنظمة داخلية لخدمة فرق التشغيل
+        Experience:
+        - 4 years as a backend developer at a web solutions company in Cairo
+        - 3 years as a full stack engineer at an Egyptian tech company
+        - 2 years developing internal systems for operations teams
 
-        المهارات:
+        Skills:
         - Python, Django, JavaScript, React, Node.js
         - PostgreSQL, Redis, Docker
-        - تصميم واجهات استخدام عملية وسريعة
+        - Designed fast and practical user interfaces
 
-        التعليم:
-        بكالوريوس هندسة برمجيات - جامعة المنصورة
+        Education:
+        B.Sc. in Software Engineering - Mansoura University
         """,
         'job_id': 1
     },
     {
-        'name': 'يوسف خالد',
+        'name': 'Youssef Khaled',
         'email': 'youssef.khaled@email.com',
         'cv_text': """
-        يوسف خالد - محلل بيانات
+        Youssef Khaled - Data Analyst
 
-        الخبرات:
-        - 3 سنوات كمحلل أعمال في شركة خدمات مالية مصرية
-        - سنتان كمحلل بيانات في قطاع التجزئة
-        - سنتان في تطوير تقارير SQL ولوحات متابعة للإدارة
+        Experience:
+        - 3 years as a business analyst at an Egyptian financial services company
+        - 2 years as a data analyst in the retail sector
+        - 2 years developing SQL reports and management dashboards
 
-        المهارات:
+        Skills:
         - SQL, Python, Excel, Tableau
         - Data Analysis, Statistics, Reporting
-        - مؤشرات الأداء وتحليل الاتجاهات
+        - KPI tracking and trend analysis
 
-        التعليم:
-        بكالوريوس إحصاء - جامعة الإسكندرية
+        Education:
+        B.Sc. in Statistics - Alexandria University
         """,
         'job_id': 2
     }

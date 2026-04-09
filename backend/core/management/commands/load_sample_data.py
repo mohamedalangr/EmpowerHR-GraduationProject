@@ -36,7 +36,7 @@ class Command(BaseCommand):
     help = 'Load realistic sample data into the database'
 
     def handle(self, *args, **options):
-        self.stdout.write('جارٍ تحميل البيانات التجريبية المحلية...')
+        self.stdout.write('Loading local demo data...')
 
         demo_users = ensure_demo_users()
         self.stdout.write(self.style.SUCCESS(f"Demo users ready: {', '.join(user.email for user in demo_users)}"))
@@ -53,7 +53,7 @@ class Command(BaseCommand):
         jobs_data = [
             {
                 'title': 'Software Engineer',
-                'description': 'تطوير خصائص لأنظمة الموارد البشرية، صيانة واجهات API، ودعم الإطلاقات الآمنة داخل السوق المصري.',
+                'description': 'Develop HR system features, maintain API endpoints, and support secure releases for the Egyptian market.',
                 'min_experience_years': 2,
                 'required_degree': 'Bachelor',
                 'required_skills': ['Python', 'Django', 'JavaScript', 'React'],
@@ -65,7 +65,7 @@ class Command(BaseCommand):
             },
             {
                 'title': 'HR Data Analyst',
-                'description': 'تحليل بيانات الموظفين، بناء نماذج تنبؤية، وتقديم تقارير تشغيلية تساعد فرق الموارد البشرية في مصر.',
+                'description': 'Analyze employee data, build predictive models, and deliver operational reports to support HR teams in Egypt.',
                 'min_experience_years': 3,
                 'required_degree': 'Master',
                 'required_skills': ['Python', 'Machine Learning', 'SQL', 'Statistics'],
@@ -77,7 +77,7 @@ class Command(BaseCommand):
             },
             {
                 'title': 'HR Manager',
-                'description': 'قيادة عمليات الأفراد، تخطيط القوى العاملة، دعم الموظفين، وضمان الالتزام بالسياسات المحلية.',
+                'description': 'Lead people operations, workforce planning, employee support, and ensure compliance with local policies.',
                 'min_experience_years': 5,
                 'required_degree': 'Bachelor',
                 'required_skills': ['HR Management', 'Communication', 'Leadership', 'Compliance'],
@@ -167,18 +167,18 @@ class Command(BaseCommand):
             )
 
         form, _ = FeedbackForm.objects.update_or_create(
-            title='استبيان رضا الموظفين',
+            title='Employee Satisfaction Survey',
             defaults={
-                'description': 'نموذج نبض ربع سنوي تجريبي لقياس رضا الموظفين داخل بيئة عمل مصرية محلية.',
+                'description': 'A quarterly pulse survey to measure employee satisfaction in a local Egyptian workplace.',
                 'isActive': True,
             },
         )
 
         questions_data = [
-            {'questionText': 'ما مدى رضاك عن دورك الحالي؟', 'fieldType': 'score_1_4', 'order': 1},
-            {'questionText': 'هل تشعر بالتقدير داخل الشركة؟', 'fieldType': 'boolean', 'order': 2},
-            {'questionText': 'كيف تقيّم التوازن بين العمل والحياة؟', 'fieldType': 'score_1_4', 'order': 3},
-            {'questionText': 'ما مدى احتمالية أن تنصح صديقًا بالعمل هنا؟', 'fieldType': 'score_1_4', 'order': 4},
+            {'questionText': 'How satisfied are you with your current role?', 'fieldType': 'score_1_4', 'order': 1},
+            {'questionText': 'Do you feel appreciated at the company?', 'fieldType': 'boolean', 'order': 2},
+            {'questionText': 'How do you rate your work-life balance?', 'fieldType': 'score_1_4', 'order': 3},
+            {'questionText': 'How likely are you to recommend working here to a friend?', 'fieldType': 'score_1_4', 'order': 4},
         ]
         question_map = {}
         for q_data in questions_data:
@@ -240,10 +240,10 @@ class Command(BaseCommand):
             feedback_submission.save(update_fields=['status', 'submittedAt'])
 
         answers_data = {
-            'ما مدى رضاك عن دورك الحالي؟': '3',
-            'هل تشعر بالتقدير داخل الشركة؟': 'true',
-            'كيف تقيّم التوازن بين العمل والحياة؟': '2',
-            'ما مدى احتمالية أن تنصح صديقًا بالعمل هنا؟': '4',
+            'How satisfied are you with your current role?': '3',
+            'Do you feel appreciated at the company?': 'true',
+            'How do you rate your work-life balance?': '2',
+            'How likely are you to recommend working here to a friend?': '4',
         }
         for question_text, answer in answers_data.items():
             question = question_map.get(question_text)
