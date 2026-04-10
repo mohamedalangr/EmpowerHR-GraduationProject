@@ -10,107 +10,107 @@ from django.core.files.base import ContentFile
 # Sample CV texts
 SAMPLE_CVS = [
     {
-        'name': 'Ahmed Hassan',
-        'email': 'ahmed.hassan@email.com',
+        'name': 'John Smith',
+        'email': 'john.smith@email.com',
         'cv_text': """
-        Ahmed Hassan - Software Engineer
+        John Smith - Software Engineer
 
-        Experience:
-        - 5 years as a Python developer at a digital solutions company in Cairo
-        - 3 years as a Django developer at an Egyptian web services company
-        - 2 years as a JavaScript developer at a local startup
+        EXPERIENCE:
+        - 5 years as Python Developer at Tech Corp
+        - 3 years as Django Developer at Web Solutions
+        - 2 years as JavaScript Developer at Startup Inc
 
-        Skills:
+        SKILLS:
         - Python, Django, JavaScript, React, SQL
-        - REST APIs, Git, Docker
-        - Built internal dashboards and HR systems
+        - Machine Learning, Data Analysis
+        - Git, Docker, AWS
 
-        Education:
-        B.Sc. in Computer Science - Cairo University
+        EDUCATION:
+        Bachelor of Computer Science
         """,
         'job_id': 1
     },
     {
-        'name': 'Sara Abdullah',
-        'email': 'sara.abdullah@email.com',
+        'name': 'Sarah Johnson',
+        'email': 'sarah.j@email.com',
         'cv_text': """
-        Sara Abdullah - HR Data Analyst
+        Sarah Johnson - Data Scientist
 
-        Experience:
-        - 4 years as a data analyst at a business services company
-        - 3 years as a machine learning engineer at an Egyptian analytics company
-        - 2 years preparing Python and SQL reports for HR teams
+        EXPERIENCE:
+        - 4 years as Data Analyst at Data Corp
+        - 3 years as ML Engineer at AI Solutions
+        - 2 years as Python Developer at Tech Inc
 
-        Skills:
-        - Python, Machine Learning, SQL, Power BI
-        - Statistics, Data Visualization, Pandas
-        - Employee attrition analytics and operational reporting
+        SKILLS:
+        - Python, Machine Learning, TensorFlow, SQL
+        - Statistics, Data Visualization, R
+        - Big Data, Hadoop, Spark
 
-        Education:
-        M.Sc. in Data Science - Ain Shams University
+        EDUCATION:
+        Master of Data Science
         """,
         'job_id': 2
     },
     {
-        'name': 'Mahmoud Fawzy',
-        'email': 'mahmoud.fawzy@email.com',
+        'name': 'Mike Davis',
+        'email': 'mike.davis@email.com',
         'cv_text': """
-        Mahmoud Fawzy - HR Manager
+        Mike Davis - HR Professional
 
-        Experience:
-        - 6 years as an HR manager at a mid-sized Egyptian company
-        - 4 years in recruitment and talent acquisition
-        - 3 years in employee relations and performance management
+        EXPERIENCE:
+        - 6 years as HR Manager at Global Corp
+        - 4 years as Talent Acquisition Specialist
+        - 3 years as Employee Relations Manager
 
-        Skills:
+        SKILLS:
         - HR Management, Recruitment, Communication
-        - Leadership, Training, Conflict Resolution
+        - Leadership, Conflict Resolution, Training
         - Performance Management, Employee Engagement
 
-        Education:
-        MBA - Arab Academy
+        EDUCATION:
+        Master of Business Administration
         """,
         'job_id': 3
     },
     {
-        'name': 'Aya Sameer',
-        'email': 'aya.sameer@email.com',
+        'name': 'Emily Chen',
+        'email': 'emily.chen@email.com',
         'cv_text': """
-        Aya Sameer - Full Stack Developer
+        Emily Chen - Full Stack Developer
 
-        Experience:
-        - 4 years as a backend developer at a web solutions company in Cairo
-        - 3 years as a full stack engineer at an Egyptian tech company
-        - 2 years developing internal systems for operations teams
+        EXPERIENCE:
+        - 4 years as Backend Developer at Web Corp
+        - 3 years as Full Stack Engineer at Tech Solutions
+        - 2 years as Python Developer at Startup Inc
 
-        Skills:
+        SKILLS:
         - Python, Django, JavaScript, React, Node.js
-        - PostgreSQL, Redis, Docker
-        - Designed fast and practical user interfaces
+        - PostgreSQL, MongoDB, Redis
+        - AWS, Docker, Kubernetes
 
-        Education:
-        B.Sc. in Software Engineering - Mansoura University
+        EDUCATION:
+        Bachelor of Software Engineering
         """,
         'job_id': 1
     },
     {
-        'name': 'Youssef Khaled',
-        'email': 'youssef.khaled@email.com',
+        'name': 'Alex Rodriguez',
+        'email': 'alex.r@email.com',
         'cv_text': """
-        Youssef Khaled - Data Analyst
+        Alex Rodriguez - Data Analyst
 
-        Experience:
-        - 3 years as a business analyst at an Egyptian financial services company
-        - 2 years as a data analyst in the retail sector
-        - 2 years developing SQL reports and management dashboards
+        EXPERIENCE:
+        - 3 years as Business Analyst at Finance Corp
+        - 2 years as Data Analyst at Retail Inc
+        - 2 years as SQL Developer at Tech Solutions
 
-        Skills:
+        SKILLS:
         - SQL, Python, Excel, Tableau
         - Data Analysis, Statistics, Reporting
-        - KPI tracking and trend analysis
+        - Machine Learning basics, R
 
-        Education:
-        B.Sc. in Statistics - Alexandria University
+        EDUCATION:
+        Bachelor of Statistics
         """,
         'job_id': 2
     }

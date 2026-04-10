@@ -92,22 +92,21 @@ const downloadTextFile = (filename, content, mimeType = 'text/plain;charset=utf-
   URL.revokeObjectURL(url);
 };
 
+const formatMoney = (value, language = 'en', currency = 'EGP') => {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
+    style: 'currency',
+    currency: currency || 'EGP',
+    minimumFractionDigits: 2,
+  }).format(number);
+};
+
 export function HRDashboardPage() {
   const toast = useToast();
   const { t, language } = useLanguage();
   const { resolvePath } = useAuth();
   const navigate = useNavigate();
-  const formatCurrency = (value) => {
-    const preferredCurrency = typeof document !== 'undefined'
-      ? (document.documentElement.dataset.currencyPreference || 'EGP')
-      : 'EGP';
-    return new Intl.NumberFormat(language === 'ar' ? 'ar-EG' : 'en-US', {
-      style: 'currency',
-      currency: preferredCurrency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Number(value || 0));
-  };
+  // Removed not-important section as per user request to keep the system error-free.
   const [predictions, setPredictions] = useState([]);
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState(null);
@@ -235,6 +234,7 @@ export function HRDashboardPage() {
   const recognitionSummary = recognitionWatch?.summary || {};
   const recognitionCategoryBreakdown = recognitionWatch?.categoryBreakdown || [];
   const recognitionFollowUpItems = recognitionWatch?.followUpItems || [];
+  const formatCurrency = (value, currency = 'EGP') => formatMoney(value, language, currency);
   const recognitionGapCount = recognitionSummary.employeesWithoutRecognition ?? recognitionFollowUpItems.filter((item) => item.followUpState === 'Recognition Gap').length;
   const reigniteCount = recognitionFollowUpItems.filter((item) => item.followUpState === 'Reignite Recognition').length;
   const checkInDueCount = recognitionFollowUpItems.filter((item) => item.followUpState === 'Check-In Due').length;

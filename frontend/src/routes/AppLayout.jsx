@@ -253,6 +253,13 @@ export function AppLayout() {
     }
   }, [isCompactMode, t, toast, updateAccountPreferences]);
 
+  const workspaceHighlights = useMemo(() => Array.from(new Set([
+    user?.role ? t(`role.${user.role}`) : sectionLabel,
+    sectionLabel,
+    isCompactMode ? t('layout.compactView') : t('layout.comfortView'),
+    isFocusMode ? t('layout.focusMode') : t('layout.quickActions'),
+  ].filter(Boolean))).slice(0, 4), [isCompactMode, isFocusMode, sectionLabel, t, user?.role]);
+
   const handleOpenHome = () => {
     if (!user?.role) return;
     navigate(ROLE_HOME[user.role] || '/login');
@@ -365,6 +372,11 @@ export function AppLayout() {
             <div className="app-topbar-eyebrow">{workspaceCopy.eyebrow}</div>
             <h1 className="app-topbar-title">{currentPageLabel}</h1>
             <p className="app-topbar-subtitle">{workspaceCopy.summary}</p>
+            <div className="app-topbar-pills">
+              {workspaceHighlights.map((item, index) => (
+                <span key={`${item}-${index}`} className="app-topbar-pill">{item}</span>
+              ))}
+            </div>
           </div>
 
           <div className="app-topbar-actions">

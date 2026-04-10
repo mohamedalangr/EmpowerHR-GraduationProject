@@ -5,73 +5,73 @@ DEMO_PASSWORD = 'TestPass123!'
 DEMO_ACCOUNTS = [
     {
         'email': 'admin@test.com',
-        'full_name': 'محمود السعيد',
+        'full_name': 'EmpowerHR Admin',
         'role': 'Admin',
         'homePath': '/admin/dashboard',
-        'jobTitle': 'مدير النظام',
-        'department': 'الإدارة',
-        'team': 'العمليات المركزية',
-        'location': 'القاهرة',
+        'jobTitle': 'Platform Administrator',
+        'department': 'Administration',
+        'team': 'Core Ops',
+        'location': 'Cairo',
         'accessSummary': [
-            'إدارة كاملة للنظام',
-            'إدارة المستخدمين والصلاحيات',
-            'الوصول إلى جميع مساحات الموارد البشرية والقيادة',
+            'Full system access',
+            'Manage users and permissions',
+            'Open every HR and leadership workspace',
         ],
     },
     {
         'email': 'hr@test.com',
-        'full_name': 'نهى عبد الرحمن',
+        'full_name': 'Hana HR Manager',
         'role': 'HRManager',
         'homePath': '/hr/dashboard',
-        'jobTitle': 'مدير موارد بشرية',
-        'department': 'الموارد البشرية',
-        'team': 'عمليات الأفراد',
-        'location': 'القاهرة',
+        'jobTitle': 'HR Manager',
+        'department': 'Human Resources',
+        'team': 'People Ops',
+        'location': 'Cairo',
         'accessSummary': [
-            'لوحة الموارد البشرية والموافقات',
-            'إدارة الموظفين والرواتب والمزايا والمستندات',
-            'متابعة التوظيف والتدريب وخطط الإحلال',
+            'HR dashboard and approvals',
+            'Employees, payroll, benefits, and documents',
+            'Hiring, training, and succession boards',
         ],
     },
     {
         'email': 'leader@test.com',
-        'full_name': 'محمد عبد الله',
+        'full_name': 'Layla Team Lead',
         'role': 'TeamLeader',
         'homePath': '/leader/team',
-        'jobTitle': 'قائد فريق التطوير',
-        'department': 'التطوير التقني',
-        'team': 'فريق المنصة',
-        'location': 'الإسكندرية',
+        'jobTitle': 'Team Leader',
+        'department': 'Engineering',
+        'team': 'Platform Squad',
+        'location': 'Alexandria',
         'accessSummary': [
-            'إدارة الفريق ولوحة التقدير',
-            'توزيع الأهداف والمهام اليومية',
-            'استخدام مساحة الموظف بصلاحيات القائد',
+            'Team hub and recognition tools',
+            'Assign goals and work tasks',
+            'Use the employee workspace with leader permissions',
         ],
     },
     {
         'email': 'employee@test.com',
-        'full_name': 'أحمد علي',
+        'full_name': 'Omar Team Member',
         'role': 'TeamMember',
         'homePath': '/employee/dashboard',
-        'jobTitle': 'مهندس برمجيات',
-        'department': 'التطوير التقني',
-        'team': 'فريق المنصة',
-        'location': 'القاهرة',
+        'jobTitle': 'Software Engineer',
+        'department': 'Engineering',
+        'team': 'Platform Squad',
+        'location': 'Cairo',
         'accessSummary': [
-            'لوحة الموظف والملف الشخصي',
-            'متابعة الحضور والرواتب والمهام والأهداف',
-            'إدارة المزايا والطلبات والمستندات والنماذج',
+            'Employee dashboard and profile',
+            'Attendance, payroll, tasks, and goals',
+            'Benefits, tickets, documents, and feedback forms',
         ],
     },
     {
         'email': 'candidate@test.com',
-        'full_name': 'سارة محمد',
+        'full_name': 'Nour Candidate',
         'role': 'Candidate',
         'homePath': '/candidate/dashboard',
         'accessSummary': [
-            'تصفح الوظائف المفتوحة',
-            'التقديم ومتابعة حالة الطلبات',
-            'استخدام بوابة المرشحين فقط',
+            'Browse open jobs',
+            'Submit and track applications',
+            'Use the candidate-only portal',
         ],
     },
 ]
@@ -95,6 +95,9 @@ def ensure_demo_users():
                 role=role,
                 is_staff=expected_staff,
                 employee_id=generate_employee_id() if role != 'Candidate' else None,
+                language_preference=User.LanguagePreference.EN,
+                theme_preference=User.ThemePreference.COMFORT,
+                focus_mode_preference=False,
             )
             user.set_password(DEMO_PASSWORD)
             user.save()
@@ -111,6 +114,15 @@ def ensure_demo_users():
                 changed = True
             if user.is_staff != expected_staff:
                 user.is_staff = expected_staff
+                changed = True
+            if user.language_preference != User.LanguagePreference.EN:
+                user.language_preference = User.LanguagePreference.EN
+                changed = True
+            if user.theme_preference != User.ThemePreference.COMFORT:
+                user.theme_preference = User.ThemePreference.COMFORT
+                changed = True
+            if user.focus_mode_preference:
+                user.focus_mode_preference = False
                 changed = True
             if role != 'Candidate' and not user.employee_id:
                 user.employee_id = generate_employee_id()

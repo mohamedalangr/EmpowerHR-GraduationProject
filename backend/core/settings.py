@@ -21,6 +21,7 @@ def env_list(name, default=None):
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+SQLITE_DB_NAME = os.getenv("SQLITE_DB_NAME", str(BASE_DIR / "db.sqlite3"))
 SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv("DJANGO_SECRET_KEY", "dev-secret-change-in-prod")
 DEBUG = env_bool("DEBUG", os.getenv("DJANGO_DEBUG", "True"))
 ALLOWED_HOSTS = env_list(
@@ -107,7 +108,7 @@ elif DEBUG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": SQLITE_DB_NAME,
         }
     }
 else:

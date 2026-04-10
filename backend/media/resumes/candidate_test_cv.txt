@@ -1,12 +1,12 @@
-أحمد حسن
-محلل بيانات | القاهرة، مصر
+Ahmed Hassan
+Data Analyst | Cairo, Egypt
 Email: ahmed@example.com
 
-الملخص المهني:
-محلل بيانات بخبرة 3 سنوات في إعداد التقارير، بناء لوحات المتابعة، وتحليل أداء الأعمال.
-يمتلك خبرة في التعامل مع البيانات الكبيرة وأتمتة التقارير لدعم فرق التشغيل والإدارة.
+Professional Summary:
+Data Analyst with 3 years of experience in reporting, dashboard creation, and business performance analysis.
+Skilled in working with large datasets and automating reporting tasks for stakeholders.
 
-المهارات:
+Skills:
 SQL
 Python
 Power BI
@@ -18,16 +18,16 @@ Automation
 Azure
 Git
 
-الخبرة:
-محلل بيانات – شركة ABC مصر (2021–2024)
+Experience:
+Data Analyst – ABC Company (2021–2024)
 
-- تصميم لوحات Power BI لمتابعة مؤشرات الأداء الشهرية
-- كتابة استعلامات SQL لاستخراج البيانات من قواعد الشركة
-- أتمتة التقارير الأسبوعية باستخدام Python
-- تنفيذ تحليل اتجاهات لدعم فرق الأعمال
-- تقليل وقت إعداد التقارير بنسبة 40%
-- بناء مسارات ETL لتجهيز البيانات بشكل منظم
+- Designed Power BI dashboards for monthly KPI reporting
+- Wrote SQL queries to extract data from company databases
+- Automated weekly reports using Python scripts
+- Performed trend analysis for business teams
+- Reduced reporting turnaround time by 40%
+- Built ETL workflows for structured reporting pipelines
 
-التعليم:
-بكالوريوس حاسبات ومعلومات
-جامعة القاهرة
+Education:
+B.Sc. in Computer Science
+Cairo University
