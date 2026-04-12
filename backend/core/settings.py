@@ -24,10 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SQLITE_DB_NAME = os.getenv("SQLITE_DB_NAME", str(BASE_DIR / "db.sqlite3"))
 SECRET_KEY = os.getenv("SECRET_KEY") or os.getenv("DJANGO_SECRET_KEY", "dev-secret-change-in-prod")
 DEBUG = env_bool("DEBUG", os.getenv("DJANGO_DEBUG", "True"))
-ALLOWED_HOSTS = env_list(
-    "ALLOWED_HOSTS",
-    env_list("DJANGO_ALLOWED_HOSTS", ["127.0.0.1", "localhost"]),
-)
+ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
     env_list(
@@ -162,7 +159,7 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
 X_FRAME_OPTIONS = "DENY"
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Path to skills taxonomy CSV
 SKILLS_TAXONOMY_CSV = os.getenv(
