@@ -27,5 +27,6 @@ urlpatterns = [
     path('api/recruitment/', include('resume_pipeline.urls')),
     path('api/feedback/',    include('feedback.urls')),
     path('api/attrition/',   include('attrition.urls')),
+    path('api/mobile/', include('mobile.urls')),
     path("api/auth/", include("accounts.urls"))
 ]
