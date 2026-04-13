@@ -1,7 +1,11 @@
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from .serializers import *
+from django.utils import timezone
+from feedback.models import AttendanceRecord, LeaveRequest, SupportTicket
+from attrition.models import AttritionPrediction
 
 # Dummy data for demonstration. Replace with real queries.
 
@@ -24,13 +28,42 @@ class MobileDashboardView(APIView):
         }
         return Response(DashboardSerializer(data).data)
 
+
 class HRDashboardView(APIView):
     permission_classes = [IsAuthenticated]
+
     def get(self, request):
+        today = timezone.now().date()
+
+        # Employees clocked in today
+        employees_clocked_in = AttendanceRecord.objects.filter(
+            date=today,
+            status=AttendanceRecord.STATUS_CLOCKED_IN
+        ).values('employee').distinct().count()
+
+        # Pending leave requests
+        pending_leaves_count = LeaveRequest.objects.filter(status=LeaveRequest.STATUS_PENDING).count()
+
+        # High attrition risk employees
+        high_risk_count = AttritionPrediction.objects.filter(risk_level='High').count()
+
+        # Unresolved tickets
+        unresolved_tickets_count = SupportTicket.objects.filter(status='Open').count()
+
+        # Company health logic
+        if high_risk_count > 10 or pending_leaves_count > 20:
+            company_health = "Urgent"
+        elif high_risk_count > 5 or pending_leaves_count > 10:
+            company_health = "Warning"
+        else:
+            company_health = "Good"
+
         data = {
-            "company_health": "Good",
-            "attendance_rate": 0.97,
-            "attrition_risk": 0.12,
+            "employees_clocked_in": employees_clocked_in,
+            "pending_leaves_count": pending_leaves_count,
+            "high_risk_count": high_risk_count,
+            "unresolved_tickets_count": unresolved_tickets_count,
+            "company_health": company_health,
         }
         return Response(data)
 
